@@ -1,71 +1,69 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { useQueueStore } from './store'
 import { PlaybackState } from '../shared/types'
 
-interface DisplayAppProps {
-  videoId?: string
-  autoplay?: boolean
+interface YTPlayer {
+  playVideo: () => void
+  pauseVideo: () => void
+  stopVideo: () => void
+  loadVideoById: (videoId: string) => void
+  getPlayerState: () => number
+  getCurrentTime: () => number
+  getDuration: () => number
+  destroy: () => void
 }
 
-const DisplayApp: React.FC<DisplayAppProps> = ({ videoId, autoplay = false }) => {
-  const playerRef = useRef<HTMLDivElement>(null)
-  const youtubePlayerRef = useRef<any>(null)
+interface PlayerError {
+  message: string
+  videoId?: string
+}
+
+const DisplayApp: React.FC = () => {
+  const playerRef = useRef<YTPlayer | null>(null)
+  const playerContainerRef = useRef<HTMLDivElement>(null)
   const [isPlayerReady, setIsPlayerReady] = useState(false)
-  const [playerState, setPlayerState] = useState<PlaybackState>(PlaybackState.IDLE)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<PlayerError | null>(null)
 
-  // Initialize YouTube IFrame Player API
+  const { 
+    currentSong, 
+    playbackState, 
+    setPlaybackState,
+    nextSong 
+  } = useQueueStore()
+
+  // Load YouTube IFrame API
   useEffect(() => {
-    // Load YouTube IFrame Player API script
-    const loadYouTubeAPI = () => {
-      return new Promise<void>((resolve) => {
-        // Check if API is already loaded
-        if (window.YT && window.YT.Player) {
-          resolve()
-          return
-        }
-
-        // Create script tag
-        const script = document.createElement('script')
-        script.src = 'https://www.youtube.com/iframe_api'
-        script.async = true
-        document.head.appendChild(script)
-
-        // YouTube API calls this function when ready
-        window.onYouTubeIframeAPIReady = () => {
-          resolve()
-        }
-      })
-    }
-
-    loadYouTubeAPI().then(() => {
+    if (window.YT && window.YT.Player) {
       initializePlayer()
-    })
-
-    // Cleanup
-    return () => {
-      if (youtubePlayerRef.current) {
-        youtubePlayerRef.current.destroy()
-      }
+      return
     }
+
+    // Load the IFrame Player API code asynchronously
+    const tag = document.createElement('script')
+    tag.src = 'https://www.youtube.com/iframe_api'
+    const firstScriptTag = document.getElementsByTagName('script')[0]
+    firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag)
+
+    // The API will call this function when it's ready
+    window.onYouTubeIframeAPIReady = initializePlayer
   }, [])
 
-  // Initialize the YouTube player
-  const initializePlayer = () => {
-    if (!playerRef.current || !window.YT) return
+  const initializePlayer = useCallback(() => {
+    if (!playerContainerRef.current || playerRef.current || !window.YT) return
 
     try {
-      const player = new window.YT.Player(playerRef.current, {
-        height: '100%',
+      playerRef.current = new window.YT.Player(playerContainerRef.current, {
         width: '100%',
-        videoId: videoId || '',
+        height: '100%',
         playerVars: {
-          autoplay: autoplay ? 1 : 0,
+          autoplay: 0,
           controls: 0, // Hide controls for karaoke mode
           disablekb: 1, // Disable keyboard controls
           fs: 0, // Disable fullscreen button
-          modestbranding: 1, // Minimal YouTube branding
+          modestbranding: 1, // Remove YouTube logo
           rel: 0, // Don't show related videos
-          iv_load_policy: 3, // Hide annotations
+          showinfo: 0, // Hide video title
+          iv_load_policy: 3, // Hide video annotations
         },
         events: {
           onReady: onPlayerReady,
@@ -73,59 +71,49 @@ const DisplayApp: React.FC<DisplayAppProps> = ({ videoId, autoplay = false }) =>
           onError: onPlayerError,
         },
       })
-
-      youtubePlayerRef.current = player
     } catch (err) {
-      setError('Failed to initialize YouTube player')
-      console.error('YouTube player initialization error:', err)
+      console.error('Failed to initialize YouTube player:', err)
+      setError({ message: 'Failed to initialize YouTube player' })
     }
-  }
+  }, [])
 
-  // Player ready callback
-  const onPlayerReady = (event: any) => {
-    setIsPlayerReady(true)
-    setPlayerState(PlaybackState.IDLE)
+  const onPlayerReady = useCallback(() => {
     console.log('YouTube player ready')
-  }
+    setIsPlayerReady(true)
+    setError(null)
+  }, [])
 
-  // Player state change callback
-  const onPlayerStateChange = (event: any) => {
-    const state = event.data
-    
-    switch (state) {
-      case -1: // UNSTARTED
-        setPlayerState(PlaybackState.IDLE)
+  const onPlayerStateChange = useCallback((event: { data: number }) => {
+    const { YT } = window
+    if (!YT) return
+
+    switch (event.data) {
+      case YT.PlayerState.PLAYING:
+        setPlaybackState(PlaybackState.PLAYING)
+        setError(null)
         break
-      case 1: // PLAYING
-        setPlayerState(PlaybackState.PLAYING)
+      case YT.PlayerState.PAUSED:
+        setPlaybackState(PlaybackState.PAUSED)
         break
-      case 2: // PAUSED
-        setPlayerState(PlaybackState.PAUSED)
+      case YT.PlayerState.BUFFERING:
+        setPlaybackState(PlaybackState.LOADING)
         break
-      case 3: // BUFFERING
-        setPlayerState(PlaybackState.LOADING)
+      case YT.PlayerState.ENDED:
+        setPlaybackState(PlaybackState.IDLE)
+        // Auto-advance to next song
+        nextSong()
         break
-      case 0: // ENDED
-        setPlayerState(PlaybackState.IDLE)
-        // Notify main process that video ended
-        if (window.electron && window.electron.ipcRenderer) {
-          window.electron.ipcRenderer.sendMessage('video-ended')
-        }
+      case YT.PlayerState.UNSTARTED:
+        setPlaybackState(PlaybackState.IDLE)
         break
-      case 5: // CUED
-        setPlayerState(PlaybackState.IDLE)
-        break
-      default:
-        setPlayerState(PlaybackState.IDLE)
     }
-  }
+  }, [setPlaybackState, nextSong])
 
-  // Player error callback
-  const onPlayerError = (event: { data: number }) => {
-    const errorCode = event.data
-    let errorMessage = 'Unknown error occurred'
+  const onPlayerError = useCallback((event: { data: number }) => {
+    console.error('YouTube player error:', event.data)
+    let errorMessage = 'Video playback error'
     
-    switch (errorCode) {
+    switch (event.data) {
       case 2:
         errorMessage = 'Invalid video ID'
         break
@@ -137,176 +125,188 @@ const DisplayApp: React.FC<DisplayAppProps> = ({ videoId, autoplay = false }) =>
         break
       case 101:
       case 150:
-        errorMessage = 'Video cannot be embedded'
+        errorMessage = 'Video not allowed in embedded players'
         break
-      default:
-        errorMessage = `YouTube player error: ${errorCode}`
     }
     
-    setError(errorMessage)
-    setPlayerState(PlaybackState.ERROR)
-    console.error('YouTube player error:', errorMessage)
-  }
+    setError({ 
+      message: errorMessage, 
+      videoId: currentSong?.videoId 
+    })
+    setPlaybackState(PlaybackState.ERROR)
+  }, [currentSong?.videoId, setPlaybackState])
 
-  // Set up IPC message handlers
+  // Handle song changes
   useEffect(() => {
-    if (!window.electron?.ipcRenderer || !isPlayerReady) return
+    if (!isPlayerReady || !playerRef.current || !currentSong) return
 
-    const handleIpcMessage = (message: string, ...args: any[]) => {
-      const player = youtubePlayerRef.current
-      if (!player) return
+    try {
+      console.log('Loading video:', currentSong.videoId)
+      setPlaybackState(PlaybackState.LOADING)
+      playerRef.current.loadVideoById(currentSong.videoId)
+    } catch (err) {
+      console.error('Failed to load video:', err)
+      setError({ 
+        message: 'Failed to load video',
+        videoId: currentSong.videoId 
+      })
+      setPlaybackState(PlaybackState.ERROR)
+    }
+  }, [currentSong, isPlayerReady, setPlaybackState])
 
-      try {
-        switch (message) {
-          case 'play-video':
-            const [videoIdToPlay] = args
-            if (videoIdToPlay) {
-              player.loadVideoById(videoIdToPlay)
-              setError(null) // Clear any previous errors
-            } else {
-              player.playVideo()
-            }
-            break
-          
-          case 'pause-video':
-            player.pauseVideo()
-            break
-          
-          case 'stop-video':
-            player.stopVideo()
-            break
-          
-          case 'seek-to':
-            const [seconds] = args
-            if (typeof seconds === 'number') {
-              player.seekTo(seconds, true)
-            }
-            break
-          
-          case 'set-volume':
-            const [volume] = args
-            if (typeof volume === 'number' && volume >= 0 && volume <= 100) {
-              player.setVolume(volume)
-            }
-            break
-          
-          case 'mute':
-            player.mute()
-            break
-          
-          case 'unmute':
-            player.unMute()
-            break
-          
-          case 'get-player-state':
-            // Send current state back to main process
-            window.electron!.ipcRenderer.sendMessage('player-state-response', {
-              state: playerState,
-              currentTime: player.getCurrentTime(),
-              duration: player.getDuration(),
-              volume: player.getVolume(),
-              isMuted: player.isMuted(),
-            })
-            break
+  // IPC handlers for player control
+  useEffect(() => {
+    const { ipcRenderer } = window
+
+    const handlePlay = () => {
+      if (playerRef.current && isPlayerReady) {
+        playerRef.current.playVideo()
+      }
+    }
+
+    const handlePause = () => {
+      if (playerRef.current && isPlayerReady) {
+        playerRef.current.pauseVideo()
+      }
+    }
+
+    const handleStop = () => {
+      if (playerRef.current && isPlayerReady) {
+        playerRef.current.stopVideo()
+      }
+    }
+
+    const handleLoadVideo = (_: any, videoId: string) => {
+      if (playerRef.current && isPlayerReady) {
+        setPlaybackState(PlaybackState.LOADING)
+        playerRef.current.loadVideoById(videoId)
+      }
+    }
+
+    const handleGetPlayerState = (_: any, requestId: string) => {
+      let playerState = null
+      if (playerRef.current && isPlayerReady) {
+        playerState = {
+          state: playerRef.current.getPlayerState(),
+          currentTime: playerRef.current.getCurrentTime(),
+          duration: playerRef.current.getDuration(),
         }
-      } catch (err) {
-        console.error('Error handling IPC message:', message, err)
-        setError(`Error executing ${message}`)
       }
+      ipcRenderer.send('player-get-state-response', requestId, playerState)
     }
 
-    // Register IPC listener
-    window.electron.ipcRenderer.on('youtube-player-control', handleIpcMessage)
+    // Register IPC listeners
+    ipcRenderer.on('player-play', handlePlay)
+    ipcRenderer.on('player-pause', handlePause)
+    ipcRenderer.on('player-stop', handleStop)
+    ipcRenderer.on('player-load-video', handleLoadVideo)
+    ipcRenderer.on('player-get-state-request', handleGetPlayerState)
 
-    // Cleanup
     return () => {
-      if (window.electron?.ipcRenderer) {
-        window.electron.ipcRenderer.removeAllListeners('youtube-player-control')
+      ipcRenderer.off('player-play', handlePlay)
+      ipcRenderer.off('player-pause', handlePause)
+      ipcRenderer.off('player-stop', handleStop)
+      ipcRenderer.off('player-load-video', handleLoadVideo)
+      ipcRenderer.off('player-get-state-request', handleGetPlayerState)
+    }
+  }, [isPlayerReady, setPlaybackState])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (playerRef.current) {
+        playerRef.current.destroy()
       }
     }
-  }, [isPlayerReady, playerState])
+  }, [])
 
-  // Render loading state
-  if (!isPlayerReady && !error) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
-          <h1 className="text-4xl font-bold mb-2">AIPC KTV</h1>
-          <p className="text-xl text-gray-300">Loading YouTube Player...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Render error state
-  if (error) {
-    return (
-      <div className="min-h-screen bg-black text-red-500 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-6xl font-bold mb-4">⚠️</h1>
-          <h2 className="text-4xl font-bold mb-4">AIPC KTV</h2>
-          <p className="text-2xl text-red-400 mb-4">Error</p>
-          <p className="text-lg text-gray-300 max-w-md">{error}</p>
-          <button
-            onClick={() => {
-              setError(null)
-              initializePlayer()
-            }}
-            className="mt-6 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // Main player interface
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
-      {/* Player container - takes most of the screen */}
-      <div className="flex-1 relative">
-        {videoId ? (
-          <div
-            ref={playerRef}
-            className="w-full h-full"
-            style={{ minHeight: 'calc(100vh - 120px)' }}
-          />
+      {/* Main Player Area */}
+      <div className="flex-1 flex items-center justify-center relative">
+        {currentSong && isPlayerReady ? (
+          <div className="w-full h-full">
+            <div 
+              ref={playerContainerRef}
+              className="w-full h-full"
+            />
+          </div>
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <div className="text-center">
-              <h1 className="text-6xl font-bold mb-4">AIPC KTV</h1>
-              <p className="text-2xl text-gray-300">Ready for Karaoke!</p>
-              <div className="mt-8 text-lg text-gray-400">
-                Select a song to start singing!
+          <div className="text-center">
+            <h1 className="text-6xl font-bold mb-4">AIPC KTV</h1>
+            {!isPlayerReady && (
+              <p className="text-2xl text-gray-300">Initializing player...</p>
+            )}
+            {isPlayerReady && !currentSong && (
+              <>
+                <p className="text-2xl text-gray-300">Display Window Ready</p>
+                <div className="mt-8 text-lg text-gray-400">
+                  Connect to start your karaoke experience!
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Error Overlay */}
+        {error && (
+          <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center">
+            <div className="text-center p-8">
+              <div className="text-4xl mb-4">⚠️</div>
+              <h2 className="text-2xl font-bold mb-2 text-red-400">Playback Error</h2>
+              <p className="text-lg text-gray-300 mb-4">{error.message}</p>
+              {error.videoId && (
+                <p className="text-sm text-gray-500">Video ID: {error.videoId}</p>
+              )}
+              <div className="mt-6 text-gray-400">
+                {playbackState === PlaybackState.ERROR && (
+                  <p>Will automatically skip to next song...</p>
+                )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Loading Overlay */}
+        {playbackState === PlaybackState.LOADING && !error && (
+          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mb-4"></div>
+              <p className="text-xl">Loading video...</p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Status bar */}
-      <div className="h-20 bg-gray-900 flex items-center justify-between px-6">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <div 
-              className={`w-3 h-3 rounded-full ${
-                playerState === PlaybackState.PLAYING ? 'bg-green-500' :
-                playerState === PlaybackState.PAUSED ? 'bg-yellow-500' :
-                playerState === PlaybackState.LOADING ? 'bg-blue-500 animate-pulse' :
-                playerState === PlaybackState.ERROR ? 'bg-red-500' :
-                'bg-gray-500'
-              }`}
-            />
-            <span className="text-sm text-gray-300 capitalize">{playerState}</span>
+      {/* Bottom Status Bar */}
+      {currentSong && (
+        <div className="bg-gray-900 bg-opacity-90 p-4 border-t border-gray-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <img 
+                src={currentSong.thumbnail} 
+                alt={currentSong.title}
+                className="w-12 h-12 rounded-lg object-cover"
+              />
+              <div>
+                <h3 className="font-bold text-lg">{currentSong.title}</h3>
+                <p className="text-gray-300 text-sm">{currentSong.channel}</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                playbackState === PlaybackState.PLAYING ? 'bg-green-600' :
+                playbackState === PlaybackState.PAUSED ? 'bg-yellow-600' :
+                playbackState === PlaybackState.LOADING ? 'bg-blue-600' :
+                playbackState === PlaybackState.ERROR ? 'bg-red-600' :
+                'bg-gray-600'
+              }`}>
+                {playbackState.toUpperCase()}
+              </div>
+            </div>
           </div>
         </div>
-        
-        <div className="text-sm text-gray-400">
-          AIPC KTV Display
-        </div>
-      </div>
+      )}
     </div>
   )
 }
