@@ -7,6 +7,12 @@ interface YTPlayer {
   pauseVideo: () => void
   stopVideo: () => void
   loadVideoById: (videoId: string) => void
+  seekTo: (seconds: number, allowSeekAhead?: boolean) => void
+  setVolume: (volume: number) => void
+  getVolume: () => number
+  mute: () => void
+  unMute: () => void
+  isMuted: () => boolean
   getPlayerState: () => number
   getCurrentTime: () => number
   getDuration: () => number
@@ -84,30 +90,56 @@ const DisplayApp: React.FC = () => {
   }, [])
 
   const onPlayerStateChange = useCallback((event: { data: number }) => {
-    const { YT } = window
+    const { YT, ipcRenderer } = window
     if (!YT) return
+
+    let newState: PlaybackState = PlaybackState.IDLE
 
     switch (event.data) {
       case YT.PlayerState.PLAYING:
+        newState = PlaybackState.PLAYING
         setPlaybackState(PlaybackState.PLAYING)
         setError(null)
         break
       case YT.PlayerState.PAUSED:
+        newState = PlaybackState.PAUSED
         setPlaybackState(PlaybackState.PAUSED)
         break
       case YT.PlayerState.BUFFERING:
+        newState = PlaybackState.LOADING
         setPlaybackState(PlaybackState.LOADING)
         break
       case YT.PlayerState.ENDED:
+        newState = PlaybackState.IDLE
         setPlaybackState(PlaybackState.IDLE)
+        // Notify main window that video ended
+        ipcRenderer.send('video-ended')
         // Auto-advance to next song
         nextSong()
         break
       case YT.PlayerState.UNSTARTED:
+        newState = PlaybackState.IDLE
         setPlaybackState(PlaybackState.IDLE)
         break
     }
-  }, [setPlaybackState, nextSong])
+
+    // Send real-time state update to control window
+    if (playerRef.current && isPlayerReady) {
+      try {
+        const stateUpdate = {
+          state: newState,
+          currentTime: playerRef.current.getCurrentTime() || 0,
+          duration: playerRef.current.getDuration() || 0,
+          volume: playerRef.current.getVolume() || 50,
+          isMuted: playerRef.current.isMuted() || false,
+          videoId: currentSong?.videoId || null,
+        }
+        ipcRenderer.send('player-state-changed', stateUpdate)
+      } catch (error) {
+        console.error('Error sending real-time state update:', error)
+      }
+    }
+  }, [setPlaybackState, nextSong, currentSong?.videoId, isPlayerReady])
 
   const onPlayerError = useCallback((event: { data: number }) => {
     console.error('YouTube player error:', event.data)
@@ -154,62 +186,160 @@ const DisplayApp: React.FC = () => {
     }
   }, [currentSong, isPlayerReady, setPlaybackState])
 
-  // IPC handlers for player control
+  // IPC handlers for comprehensive player control
   useEffect(() => {
     const { ipcRenderer } = window
 
-    const handlePlay = () => {
-      if (playerRef.current && isPlayerReady) {
-        playerRef.current.playVideo()
+    const handlePlayerControl = (_: any, command: string, ...args: any[]) => {
+      if (!playerRef.current || !isPlayerReady) {
+        console.warn(`Player not ready for command: ${command}`)
+        return
       }
-    }
 
-    const handlePause = () => {
-      if (playerRef.current && isPlayerReady) {
-        playerRef.current.pauseVideo()
-      }
-    }
+      try {
+        switch (command) {
+          case 'play-video':
+            if (args[0]) {
+              // Play specific video
+              setPlaybackState(PlaybackState.LOADING)
+              playerRef.current.loadVideoById(args[0])
+              setTimeout(() => {
+                if (playerRef.current && isPlayerReady) {
+                  playerRef.current.playVideo()
+                }
+              }, 100)
+            } else {
+              // Resume current video
+              playerRef.current.playVideo()
+            }
+            break
 
-    const handleStop = () => {
-      if (playerRef.current && isPlayerReady) {
-        playerRef.current.stopVideo()
-      }
-    }
+          case 'pause-video':
+            playerRef.current.pauseVideo()
+            break
 
-    const handleLoadVideo = (_: any, videoId: string) => {
-      if (playerRef.current && isPlayerReady) {
-        setPlaybackState(PlaybackState.LOADING)
-        playerRef.current.loadVideoById(videoId)
-      }
-    }
+          case 'stop-video':
+            playerRef.current.stopVideo()
+            break
 
-    const handleGetPlayerState = (_: any, requestId: string) => {
-      let playerState = null
-      if (playerRef.current && isPlayerReady) {
-        playerState = {
-          state: playerRef.current.getPlayerState(),
-          currentTime: playerRef.current.getCurrentTime(),
-          duration: playerRef.current.getDuration(),
+          case 'seek-to':
+            const seekTime = args[0]
+            if (typeof seekTime === 'number' && seekTime >= 0) {
+              playerRef.current.seekTo(seekTime, true)
+              // Send state update after seek
+              setTimeout(() => sendPlayerStateUpdate(), 100)
+            } else {
+              console.error('Invalid seek time:', seekTime)
+            }
+            break
+
+          case 'set-volume':
+            const volume = args[0]
+            if (typeof volume === 'number' && volume >= 0 && volume <= 100) {
+              playerRef.current.setVolume(volume)
+              // Send state update after volume change
+              setTimeout(() => sendPlayerStateUpdate(), 100)
+            } else {
+              console.error('Invalid volume:', volume)
+            }
+            break
+
+          case 'mute':
+            playerRef.current.mute()
+            setTimeout(() => sendPlayerStateUpdate(), 100)
+            break
+
+          case 'unmute':
+            playerRef.current.unMute()
+            setTimeout(() => sendPlayerStateUpdate(), 100)
+            break
+
+          case 'get-player-state':
+            const requestId = args[0] || 'unknown'
+            sendPlayerStateResponse(requestId)
+            break
+
+          default:
+            console.warn('Unknown player command:', command)
         }
+      } catch (error) {
+        console.error(`Error executing command ${command}:`, error)
+        ipcRenderer.send('player-error', {
+          command,
+          error: error instanceof Error ? error.message : String(error)
+        })
       }
-      ipcRenderer.send('player-get-state-response', requestId, playerState)
     }
 
-    // Register IPC listeners
-    ipcRenderer.on('player-play', handlePlay)
-    ipcRenderer.on('player-pause', handlePause)
-    ipcRenderer.on('player-stop', handleStop)
-    ipcRenderer.on('player-load-video', handleLoadVideo)
-    ipcRenderer.on('player-get-state-request', handleGetPlayerState)
+    // Helper function to send comprehensive player state
+    const sendPlayerStateResponse = (requestId: string) => {
+      if (!playerRef.current || !isPlayerReady) {
+        ipcRenderer.send('player-state-response', requestId, null)
+        return
+      }
+
+      try {
+        const state = {
+          state: convertYTStateToPlaybackState(playerRef.current.getPlayerState()),
+          currentTime: playerRef.current.getCurrentTime() || 0,
+          duration: playerRef.current.getDuration() || 0,
+          volume: playerRef.current.getVolume() || 50,
+          isMuted: playerRef.current.isMuted() || false,
+          videoId: currentSong?.videoId || null,
+        }
+        ipcRenderer.send('player-state-response', requestId, state)
+      } catch (error) {
+        console.error('Error getting player state:', error)
+        ipcRenderer.send('player-state-response', requestId, null)
+      }
+    }
+
+    // Helper function to send real-time state updates
+    const sendPlayerStateUpdate = () => {
+      if (!playerRef.current || !isPlayerReady) return
+
+      try {
+        const state = {
+          state: convertYTStateToPlaybackState(playerRef.current.getPlayerState()),
+          currentTime: playerRef.current.getCurrentTime() || 0,
+          duration: playerRef.current.getDuration() || 0,
+          volume: playerRef.current.getVolume() || 50,
+          isMuted: playerRef.current.isMuted() || false,
+          videoId: currentSong?.videoId || null,
+        }
+        ipcRenderer.send('player-state-changed', state)
+      } catch (error) {
+        console.error('Error sending state update:', error)
+      }
+    }
+
+    // Helper function to convert YouTube player state to PlaybackState
+    const convertYTStateToPlaybackState = (ytState: number): PlaybackState => {
+      const { YT } = window
+      if (!YT) return PlaybackState.IDLE
+
+      switch (ytState) {
+        case YT.PlayerState.PLAYING:
+          return PlaybackState.PLAYING
+        case YT.PlayerState.PAUSED:
+          return PlaybackState.PAUSED
+        case YT.PlayerState.BUFFERING:
+          return PlaybackState.LOADING
+        case YT.PlayerState.ENDED:
+          return PlaybackState.IDLE
+        case YT.PlayerState.UNSTARTED:
+        default:
+          return PlaybackState.IDLE
+      }
+    }
+
+    // Register comprehensive IPC listener
+    ipcRenderer.on('youtube-player-control', handlePlayerControl)
 
     return () => {
-      ipcRenderer.off('player-play', handlePlay)
-      ipcRenderer.off('player-pause', handlePause)
-      ipcRenderer.off('player-stop', handleStop)
-      ipcRenderer.off('player-load-video', handleLoadVideo)
-      ipcRenderer.off('player-get-state-request', handleGetPlayerState)
+      ipcRenderer.off('youtube-player-control', handlePlayerControl)
     }
-  }, [isPlayerReady, setPlaybackState])
+  }, [isPlayerReady, setPlaybackState, currentSong?.videoId])
 
   // Cleanup on unmount
   useEffect(() => {

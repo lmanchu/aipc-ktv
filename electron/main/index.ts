@@ -235,15 +235,20 @@ ipcMain.handle('close-display-window', () => {
   return { success: false, error: 'Display window not found' }
 })
 
-// Player Control IPC - enhanced with validation
+// Enhanced Player Control IPC with comprehensive command support
 ipcMain.handle('youtube-player-control', (_, command: string, ...args: any[]) => {
   if (!displayWin) {
     return { success: false, error: 'Display window not available' }
   }
 
-  const validCommands = ['play', 'pause', 'stop', 'next', 'queue-update', 'load-video', 'seek', 'volume', 'mute']
+  const validCommands = [
+    'play-video', 'pause-video', 'stop-video', 'seek-to', 
+    'set-volume', 'mute', 'unmute', 'get-player-state',
+    'load-video', 'queue-update', 'next-song'
+  ]
+  
   if (!validCommands.includes(command)) {
-    return { success: false, error: `Invalid command: ${command}` }
+    return { success: false, error: `Invalid command: ${command}. Valid commands: ${validCommands.join(', ')}` }
   }
 
   try {
@@ -255,21 +260,39 @@ ipcMain.handle('youtube-player-control', (_, command: string, ...args: any[]) =>
   }
 })
 
-// Handle messages from display window to control window
+// Enhanced bidirectional message forwarding for real-time sync
 ipcMain.on('video-ended', () => {
-  if (win) {
+  if (win && !win.isDestroyed()) {
     win.webContents.send('video-ended')
   }
 })
 
+ipcMain.on('player-state-changed', (_, stateData) => {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('player-state-changed', stateData)
+  }
+})
+
 ipcMain.on('player-state-response', (_, data) => {
-  if (win) {
+  if (win && !win.isDestroyed()) {
     win.webContents.send('player-state-response', data)
   }
 })
 
+ipcMain.on('playback-progress', (_, progressData) => {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('playback-progress', progressData)
+  }
+})
+
+ipcMain.on('volume-changed', (_, volumeData) => {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('volume-changed', volumeData)
+  }
+})
+
 ipcMain.on('queue-update-request', (_, queueData) => {
-  if (win) {
+  if (win && !win.isDestroyed()) {
     win.webContents.send('queue-update-request', queueData)
   }
 })

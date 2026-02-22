@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom'
+import { vi } from 'vitest'
 
 // Mock window.ipcRenderer for all tests
 Object.defineProperty(window, 'ipcRenderer', {
@@ -42,6 +43,20 @@ Object.defineProperty(document, 'getElementsByTagName', {
   value: vi.fn(() => [{ parentNode: { insertBefore: vi.fn() } }]),
   writable: true,
 })
+
+// Add proper DOM properties for React
+Object.defineProperty(globalThis, 'HTMLElement', {
+  value: class MockHTMLElement {
+    style = {}
+  },
+  writable: true,
+})
+
+// Mock Element and Node
+if (typeof Element === 'undefined') {
+  global.Element = {} as any
+  global.Node = {} as any
+}
 
 // Mock console.log to reduce test output noise
 vi.spyOn(console, 'log').mockImplementation(() => {})

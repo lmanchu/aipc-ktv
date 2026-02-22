@@ -55,7 +55,7 @@ export type YouTubePlayerCommand =
   | 'get-player-state';
 
 /**
- * YouTube player state information
+ * YouTube player state information for comprehensive IPC communication
  */
 export interface PlayerStateInfo {
   state: PlaybackState;
@@ -63,6 +63,7 @@ export interface PlayerStateInfo {
   duration: number;
   volume: number;
   isMuted: boolean;
+  videoId?: string | null;
 }
 
 /**

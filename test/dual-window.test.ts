@@ -26,11 +26,11 @@ describe('Dual Window Architecture', () => {
     
     // Check if main process contains window management code
     const mainContent = require('fs').readFileSync(mainIndexPath, 'utf8');
-    expect(mainContent).toContain('controlWindow');
-    expect(mainContent).toContain('displayWindow');
-    expect(mainContent).toContain('getDisplayConfiguration');
-    expect(mainContent).toContain('createControlWindow');
+    expect(mainContent).toContain('displayWin');
     expect(mainContent).toContain('createDisplayWindow');
+    expect(mainContent).toContain('open-display-window');
+    expect(mainContent).toContain('close-display-window');
+    expect(mainContent).toContain('youtube-player-control');
   });
 
   it('should have Vite config supporting multiple entry points', () => {

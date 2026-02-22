@@ -40,7 +40,7 @@ AIPC KTV Development Progress - Run ID: a2dbc74e-8e32-40bc-ae94-74e97b3a0062
 
 ### ✅ Story 4.0: YouTube IFrame Player API Integration
 **Branch**: feature/week-1-4-implementation  
-**Commit**: 2d30ea4
+**Commit**: 05d7e9c
 
 **Implementation**:
 - **DisplayApp.tsx YouTube Integration**:

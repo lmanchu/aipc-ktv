@@ -158,8 +158,13 @@ ipcMain.handle('open-win', (_, arg) => {
 
 // YouTube Player IPC Handlers
 ipcMain.handle('open-display-window', async () => {
-  const display = await createDisplayWindow()
-  return { success: true, windowId: display.id }
+  try {
+    const display = await createDisplayWindow()
+    return { success: true, windowId: display.id }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { success: false, error: message }
+  }
 })
 
 ipcMain.handle('close-display-window', () => {
@@ -177,6 +182,25 @@ ipcMain.handle('youtube-player-control', (_, command: string, ...args: any[]) =>
   }
 
   try {
+    // Validate command and arguments
+    switch (command) {
+      case 'play-video':
+        if (args[0] && typeof args[0] !== 'string') {
+          return { success: false, error: 'Invalid video ID format' }
+        }
+        break
+      case 'seek-to':
+        if (typeof args[0] !== 'number' || args[0] < 0) {
+          return { success: false, error: 'Seek time must be a non-negative number' }
+        }
+        break
+      case 'set-volume':
+        if (typeof args[0] !== 'number' || args[0] < 0 || args[0] > 100) {
+          return { success: false, error: 'Volume must be between 0 and 100' }
+        }
+        break
+    }
+
     displayWin.webContents.send('youtube-player-control', command, ...args)
     return { success: true }
   } catch (error) {
@@ -185,7 +209,7 @@ ipcMain.handle('youtube-player-control', (_, command: string, ...args: any[]) =>
   }
 })
 
-// Handle messages from display window
+// Handle messages from display window back to control window
 ipcMain.on('video-ended', () => {
   // Forward to main window
   if (win) {
@@ -193,9 +217,23 @@ ipcMain.on('video-ended', () => {
   }
 })
 
-ipcMain.on('player-state-response', (_, data) => {
-  // Forward to main window
+ipcMain.on('player-state-response', (_, requestId: string, data: any) => {
+  // Forward to main window with request ID for correlation
   if (win) {
-    win.webContents.send('player-state-response', data)
+    win.webContents.send('player-state-response', requestId, data)
+  }
+})
+
+ipcMain.on('player-error', (_, error: any) => {
+  // Forward player errors to main window
+  if (win) {
+    win.webContents.send('player-error', error)
+  }
+})
+
+ipcMain.on('player-state-changed', (_, state: any) => {
+  // Forward real-time state changes to main window
+  if (win) {
+    win.webContents.send('player-state-changed', state)
   }
 })

@@ -150,37 +150,73 @@ export const useYouTubePlayer = (): UseYouTubePlayerReturn => {
       return null
     }
 
-    const success = await sendPlayerCommand('get-player-state')
-    if (success) {
-      // The actual state will be received via IPC message handler
-      // Return the current cached state for now
-      return playerState
-    }
-    return null
+    const requestId = `state-request-${Date.now()}-${Math.random()}`
+    
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        resolve(playerState) // Return cached state if no response
+      }, 1000) // 1 second timeout
+
+      // Set up one-time listener for the response
+      const handleResponse = (receivedRequestId: string, data: PlayerStateInfo | null) => {
+        if (receivedRequestId === requestId) {
+          clearTimeout(timeout)
+          window.electron!.ipcRenderer.removeAllListeners('player-state-response')
+          resolve(data)
+        }
+      }
+
+      window.electron!.ipcRenderer.on('player-state-response', handleResponse)
+      
+      // Send the request
+      sendPlayerCommand('get-player-state', requestId).catch(() => {
+        clearTimeout(timeout)
+        resolve(null)
+      })
+    })
   }, [isElectron, sendPlayerCommand, playerState])
 
-  // Set up IPC message listeners
+  // Set up IPC message listeners for real-time state syncing
   useEffect(() => {
     if (!isElectron) return
 
     const handleVideoEnded = () => {
       setPlayerState(prev => prev ? { ...prev, state: PlaybackState.IDLE } : null)
+      setLastError(null)
     }
 
-    const handlePlayerStateResponse = (data: PlayerStateInfo) => {
-      setPlayerState(data)
+    const handlePlayerStateResponse = (requestId: string, data: PlayerStateInfo | null) => {
+      if (data) {
+        setPlayerState(data)
+        setLastError(null)
+      }
+    }
+
+    const handlePlayerStateChanged = (stateUpdate: PlayerStateInfo) => {
+      // Real-time state synchronization
+      setPlayerState(stateUpdate)
       setLastError(null)
+    }
+
+    const handlePlayerError = (error: any) => {
+      const errorMessage = error?.error || error?.message || 'Player error occurred'
+      setLastError(errorMessage)
+      console.error('Player error received via IPC:', error)
     }
 
     // Register listeners
     window.electron!.ipcRenderer.on('video-ended', handleVideoEnded)
     window.electron!.ipcRenderer.on('player-state-response', handlePlayerStateResponse)
+    window.electron!.ipcRenderer.on('player-state-changed', handlePlayerStateChanged)
+    window.electron!.ipcRenderer.on('player-error', handlePlayerError)
 
     // Cleanup
     return () => {
       if (window.electron?.ipcRenderer) {
         window.electron.ipcRenderer.removeAllListeners('video-ended')
         window.electron.ipcRenderer.removeAllListeners('player-state-response')
+        window.electron.ipcRenderer.removeAllListeners('player-state-changed')
+        window.electron.ipcRenderer.removeAllListeners('player-error')
       }
     }
   }, [isElectron])
