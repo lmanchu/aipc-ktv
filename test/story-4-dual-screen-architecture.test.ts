@@ -68,10 +68,14 @@ vi.mock('node:url', () => ({
 }))
 
 vi.mock('node:module', () => ({
+  default: {
+    createRequire: vi.fn(() => vi.fn())
+  },
   createRequire: vi.fn(() => vi.fn())
 }))
 
-vi.mock('./update', () => ({
+// Mock the electron/main/update module
+vi.mock('/Users/lman/tachikoma/haro/aipc-ktv/electron/main/update.ts', () => ({
   update: vi.fn()
 }))
 
@@ -86,9 +90,9 @@ describe('Story 4.0: Dual-Screen Window Architecture', () => {
   })
 
   describe('AC1: Main process creates two windows with correct dimensions', () => {
-    it('should create control window with 800x600 dimensions', () => {
+    it('should create control window with 800x600 dimensions', async () => {
       // Import main after mocks are set up
-      require('/Users/lman/tachikoma/haro/aipc-ktv/electron/main/index.ts')
+      await import('/Users/lman/tachikoma/haro/aipc-ktv/electron/main/index.ts')
       
       // Control window should be created on app ready
       expect(mockBrowserWindow).toHaveBeenCalledWith(

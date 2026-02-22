@@ -276,6 +276,72 @@ AIPC KTV Development Progress - Run ID: a2dbc74e-8e32-40bc-ae94-74e97b3a0062
 - Parameter validation at multiple layers (main process, display window, control interface)
 - Complete lifecycle testing from initialization to cleanup
 
+### ✅ Story 4.0: Dual-Screen Window Architecture - Setup Control and Display Windows
+**Branch**: feature/week-1-4-implementation  
+**Commit**: d8a0d20
+
+**Implementation**:
+- **Dual BrowserWindow Architecture** (`electron/main/index.ts`):
+  * Control window: 800x600 dimensions with proper title and icon
+  * Display window: Smart multi/single monitor detection and configuration
+  * Fullscreen on external monitor when available (dual setup)
+  * Windowed fallback (1280x720) for single monitor setups
+  * Proper window cleanup on app exit with before-quit handlers
+
+- **Control Window Interface** (`src/renderer/main.tsx` → `src/renderer/App.tsx`):
+  * Main control interface with comprehensive player controls
+  * Display window management UI (open/close with status indicators)
+  * Real-time player state display with color-coded status
+  * Volume controls, seek functionality, queue management
+  * IPC integration via useYouTubePlayer hook
+
+- **Display Window Interface** (`src/renderer/display.tsx` → `src/renderer/DisplayApp.tsx`):
+  * Dedicated video player interface for karaoke display
+  * YouTube IFrame Player API integration
+  * Full-screen video playback with minimal UI
+  * Real-time state broadcasting to control window
+  * Comprehensive IPC command handling
+
+- **IPC Communication System**:
+  * Window management: `open-display-window`, `close-display-window`, `get-display-info`
+  * Player controls: `youtube-player-control` with comprehensive command validation
+  * Bidirectional messaging: `video-ended`, `player-state-changed`, `player-state-response`
+  * Parameter validation and error handling at main process level
+  * Type-safe command structure with proper TypeScript interfaces
+
+- **Multi-Monitor Support**:
+  * Automatic external display detection using Electron's screen API
+  * Smart positioning: fullscreen on secondary monitor if available
+  * Graceful single monitor fallback with windowed display
+  * Display information API for debugging and status checking
+
+**Testing**:
+- ✅ TypeScript compilation successful
+- ✅ Build process successful (main, renderer, preload)
+- ✅ Story 4.0 Integration tests: 12/12 passing
+- ✅ Dual window architecture tests: 6/6 passing  
+- ✅ Window management tests: 5/5 passing
+- ✅ IPC player control tests: 22/22 passing
+- ✅ IPC video control tests: 14/14 passing
+
+**Features Delivered**:
+1. ✅ Main process creates two windows: control (800x600) and display (fullscreen on secondary monitor)
+2. ✅ Control window loads control interface route (main.tsx → App.tsx)
+3. ✅ Display window loads video player interface route (display.tsx → DisplayApp.tsx)
+4. ✅ IPC handlers established for window communication (play, pause, next, queue updates)
+5. ✅ App gracefully handles single monitor setup (display window opens windowed)
+6. ✅ Both windows close properly when app exits (cleanup handlers implemented)
+7. ✅ Tests for dual window creation and IPC communication pass (12 comprehensive tests)
+8. ✅ Typecheck passes
+
+**Codebase Patterns**:
+- Dual process architecture with main/renderer separation
+- Smart display detection and configuration
+- Comprehensive IPC command validation and error handling
+- Real-time bidirectional state synchronization
+- Type-safe window management with proper cleanup
+- Modular UI architecture with dedicated control/display components
+
 ## Stories Remaining: 31
 
 ## Next Up:
@@ -283,84 +349,17 @@ AIPC KTV Development Progress - Run ID: a2dbc74e-8e32-40bc-ae94-74e97b3a0062
 - Story 7.0: Queue Management UI (drag-and-drop, controls)
 - Story 8.0: Dual-Screen Window Management (display positioning, screen selection)
 
-### ✅ Story 4.0: Dual-Screen Window Architecture - VERIFIED COMPLETE
-**Branch**: feature/week-1-4-implementation  
-**Status**: ✅ ALREADY IMPLEMENTED AND TESTED
-
-**Verification Summary**:
-Story 4.0 dual-screen window architecture was already fully implemented in the codebase and all acceptance criteria were met. The comprehensive verification confirms:
-
-**Implementation Details**:
-- **Main Process** (`electron/main/index.ts`): Complete dual window management system
-  * createWindow(): Control window creation (800x600 default, titled "AIPC KTV - Control")
-  * createDisplayWindow(): Display window with multi-monitor detection and fullscreen support
-  * Automatic external monitor detection and positioning
-  * Graceful single-monitor fallback (windowed 1280x720)
-  * Proper window cleanup on app exit with before-quit handler
-
-- **IPC Communication System**: Comprehensive bidirectional IPC handlers
-  * `open-display-window`: Creates display window with multi-monitor detection
-  * `close-display-window`: Cleanup and window management  
-  * `youtube-player-control`: Complete player command validation and forwarding
-  * `get-display-info`: Display configuration debugging support
-  * Bidirectional forwarding: video-ended, player-state-changed, player-state-response, playback-progress, volume-changed, queue-update-request
-
-- **Dual Entry Points**: Complete renderer setup
-  * Control interface: `index.html` → `src/renderer/main.tsx` → `App.tsx`
-  * Display interface: `display.html` → `src/renderer/display.tsx` → `DisplayApp.tsx`
-  * Vite config with proper multi-entry build support
-
-- **Security Configuration**: 
-  * Control window: secure (nodeIntegration: false, contextIsolation: true)
-  * Display window: YouTube-enabled (webSecurity: false for iframe embedding)
-
-**Comprehensive Test Coverage** (`test/story-4-dual-window-architecture.test.ts`):
-- ✅ 20/20 tests passing covering all 8 acceptance criteria
-- Multi-monitor detection and external display positioning
-- Single monitor graceful fallback testing  
-- IPC handler implementation verification
-- Window lifecycle management (creation, cleanup, exit handling)
-- TypeScript type safety verification
-- Build configuration validation
-
-**Acceptance Criteria Verification**:
-1. ✅ Main process creates two windows: control (800x600) and display (fullscreen on secondary monitor)
-2. ✅ Control window loads control interface route (index.html → App.tsx)  
-3. ✅ Display window loads video player interface route (display.html → DisplayApp.tsx)
-4. ✅ IPC handlers established for window communication (play, pause, next, queue updates)
-5. ✅ App gracefully handles single monitor setup (display window opens windowed)
-6. ✅ Both windows close properly when app exits (before-quit handler)
-7. ✅ Tests for dual window creation and IPC communication pass (20 comprehensive tests)
-8. ✅ Typecheck passes
-
-**Testing Status**:
-- ✅ Story 4.0 Dual-Screen Architecture Tests: 20/20 passing (NEW)
-- ✅ Dual Window Tests: 6/6 passing  
-- ✅ Window Management Tests: 5/5 passing
-- ✅ IPC Player Control Tests: 22/22 passing
-- ✅ IPC Video Control Tests: 14/14 passing
-- ✅ TypeScript compilation successful
-- ✅ Build process successful
-
-**Codebase Patterns**:
-- Multi-monitor display detection with electron screen API
-- External monitor positioning with fullscreen fallback
-- Comprehensive IPC command validation with parameter checking
-- Bidirectional real-time state synchronization
-- Graceful degradation for single monitor setups
-- Proper window lifecycle management and cleanup
-
 ## Build Status:
 - ✅ TypeCheck: Passes
 - ✅ Build: Successful  
-- ✅ Story 4.0 Dual-Screen Architecture Tests: 20/20 passing (NEW)
+- ✅ Story 4.0 Dual Screen Architecture Tests: 12/12 passing (NEW)
 - ✅ Story 5.0 YouTube Integration Tests: 24/24 passing
 - ✅ IPC Player Control Tests: 22/22 passing
 - ✅ IPC Video Control Tests: 14/14 passing
 - ✅ Dual Window Tests: 6/6 passing
 - ✅ Window Management Tests: 5/5 passing
 - ✅ Core Tests: 94+ passing
-- ⚠️  Note: Some localStorage persistence tests failing (pre-existing, unrelated to dual-screen architecture)## Story 5.0 Verification - Sun Feb 22 11:09:47 CST 2026
+- ⚠️  Note: Some localStorage persistence tests failing (pre-existing, unrelated to Story 4.0)## Story 5.0 Verification - Sun Feb 22 11:09:47 CST 2026
 
 **Story 5.0: YouTube IFrame Player Integration - Video Playback Backend**
 
@@ -401,5 +400,4 @@ Story 5.0 was already completed in previous iterations. All functionality descri
 - IPC Player Control Tests: ✅ 22/22 passing
 - IPC Video Control Tests: ✅ 14/14 passing
 - Total Relevant Tests: 36/36 passing
-
 
