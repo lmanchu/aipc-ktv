@@ -11,6 +11,7 @@ files:
 mac:
   category: public.app-category.entertainment
   icon: build/icons/icon.icns
+  identity: null
   target:
     - target: dmg
       arch:

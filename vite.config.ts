@@ -54,6 +54,9 @@ export default defineConfig(({ command }) => {
               outDir: 'dist-electron/preload',
               rollupOptions: {
                 external: Object.keys('dependencies' in pkg ? pkg.dependencies : {}),
+                output: {
+                  entryFileNames: 'index.mjs',
+                },
               },
             },
           },

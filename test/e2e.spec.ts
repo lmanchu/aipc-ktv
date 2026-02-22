@@ -49,12 +49,16 @@ if (process.platform === 'linux') {
     })
 
     test('should be home page is load correctly', async () => {
+      // Wait for the React app to fully load by waiting for the h1 element
+      await page.waitForSelector('h1', { timeout: 10000 })
       const h1 = await page.$('h1')
       const title = await h1?.textContent()
       expect(title).eq('Electron + Vite + React')
     })
 
     test('should be count button can click', async () => {
+      // Wait for the button to be available
+      await page.waitForSelector('button', { timeout: 10000 })
       const countButton = await page.$('button')
       await countButton?.click()
       const countValue = await countButton?.textContent()
