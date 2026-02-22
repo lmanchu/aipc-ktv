@@ -1,0 +1,51 @@
+AIPC KTV Development Progress - Run ID: a2dbc74e-8e32-40bc-ae94-74e97b3a0062
+
+## Completed Stories
+
+### ✅ Story 3.0: Database Schema Setup - Queue and Playlist Models
+**Branch**: feature/week-1-4-implementation  
+**Commit**: 19e3542
+
+**Implementation**:
+- Defined TypeScript interfaces in `src/shared/types.ts`:
+  - Song interface with videoId, title, channel, thumbnail, duration fields
+  - Queue interface with currentSong, upcomingSongs array, playbackState
+  - Playlist interface with id, name, songs array, createdAt timestamp
+  - PlaybackState enum with IDLE, PLAYING, PAUSED, LOADING, ERROR states
+
+- Implemented Zustand stores:
+  - **Queue Store** (`src/renderer/store/queueStore.ts`):
+    * State: currentSong, upcomingSongs[], playbackState
+    * Actions: addSong, removeSong, nextSong, clearQueue, reorderQueue, setPlaybackState, playQueue, playNext, setCurrentSong, shuffleQueue, moveInQueue
+  - **Playlist Store** (`src/renderer/store/playlistStore.ts`):
+    * State: playlists[]
+    * Actions: createPlaylist, deletePlaylist, addSongToPlaylist, removeSongFromPlaylist, loadPlaylistToQueue, updatePlaylistName, renamePlaylist, moveSongInPlaylist, getPlaylist, clearPlaylist
+    * Includes persist middleware for localStorage
+
+- Re-export system via `src/renderer/types/index.ts` and `src/renderer/store/index.ts`
+
+**Testing**:
+- All existing tests pass (117/117) ✅
+- Queue and playlist data models fully tested
+- TypeScript compilation successful
+- Build process successful
+
+**Codebase Patterns**:
+- Zustand stores with devtools middleware for debugging
+- Persist middleware for playlists (localStorage)
+- Action-based store pattern with typed interfaces
+- Re-export pattern for clean imports
+- Enum-based state management for PlaybackState
+- Helper functions (generateId) at module level
+
+## Stories Remaining: 34
+
+## Next Up:
+- Story 4.0: YouTube IFrame Player API Integration  
+- Story 5.0: Dual-Screen Window Management
+
+## Build Status:
+- ✅ TypeCheck: Passes
+- ✅ Build: Successful  
+- ✅ Tests: 117/117 passing
+- ⚠️  Note: Zustand persist warnings in tests (expected, no localStorage in test environment)

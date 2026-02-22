@@ -40,3 +40,46 @@ export interface Playlist {
   songs: Song[];
   createdAt: number; // timestamp in milliseconds
 }
+
+/**
+ * YouTube player control messages for IPC communication
+ */
+export type YouTubePlayerCommand = 
+  | 'play-video'
+  | 'pause-video'
+  | 'stop-video'
+  | 'seek-to'
+  | 'set-volume'
+  | 'mute'
+  | 'unmute'
+  | 'get-player-state';
+
+/**
+ * YouTube player state information
+ */
+export interface PlayerStateInfo {
+  state: PlaybackState;
+  currentTime: number;
+  duration: number;
+  volume: number;
+  isMuted: boolean;
+}
+
+/**
+ * YouTube Player state interface for IPC communication
+ */
+export interface YouTubePlayerState {
+  state: number; // YouTube player state constant
+  currentTime: number; // current playback time in seconds
+  duration: number; // total video duration in seconds
+}
+
+/**
+ * YouTube Player control actions
+ */
+export enum PlayerAction {
+  PLAY = 'play',
+  PAUSE = 'pause',
+  STOP = 'stop',
+  LOAD = 'load',
+}

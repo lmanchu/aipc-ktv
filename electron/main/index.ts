@@ -40,12 +40,16 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let win: BrowserWindow | null = null
+let displayWin: BrowserWindow | null = null
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
+const displayHtml = path.join(RENDERER_DIST, 'display.html')
 
 async function createWindow() {
   win = new BrowserWindow({
-    title: 'Main window',
+    title: 'AIPC KTV - Control',
+    width: 1200,
+    height: 800,
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
     webPreferences: {
       preload,
@@ -79,6 +83,36 @@ async function createWindow() {
 
   // Auto update
   update(win)
+}
+
+async function createDisplayWindow() {
+  if (displayWin) return displayWin
+
+  displayWin = new BrowserWindow({
+    title: 'AIPC KTV - Display',
+    width: 1920,
+    height: 1080,
+    icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
+    webPreferences: {
+      preload,
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: false, // Allow YouTube iframe
+    },
+  })
+
+  if (VITE_DEV_SERVER_URL) {
+    displayWin.loadURL(`${VITE_DEV_SERVER_URL}display.html`)
+    displayWin.webContents.openDevTools()
+  } else {
+    displayWin.loadFile(displayHtml)
+  }
+
+  displayWin.on('closed', () => {
+    displayWin = null
+  })
+
+  return displayWin
 }
 
 app.whenReady().then(createWindow)
@@ -119,5 +153,49 @@ ipcMain.handle('open-win', (_, arg) => {
     childWindow.loadURL(`${VITE_DEV_SERVER_URL}#${arg}`)
   } else {
     childWindow.loadFile(indexHtml, { hash: arg })
+  }
+})
+
+// YouTube Player IPC Handlers
+ipcMain.handle('open-display-window', async () => {
+  const display = await createDisplayWindow()
+  return { success: true, windowId: display.id }
+})
+
+ipcMain.handle('close-display-window', () => {
+  if (displayWin) {
+    displayWin.close()
+    displayWin = null
+    return { success: true }
+  }
+  return { success: false, error: 'Display window not found' }
+})
+
+ipcMain.handle('youtube-player-control', (_, command: string, ...args: any[]) => {
+  if (!displayWin) {
+    return { success: false, error: 'Display window not available' }
+  }
+
+  try {
+    displayWin.webContents.send('youtube-player-control', command, ...args)
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { success: false, error: message }
+  }
+})
+
+// Handle messages from display window
+ipcMain.on('video-ended', () => {
+  // Forward to main window
+  if (win) {
+    win.webContents.send('video-ended')
+  }
+})
+
+ipcMain.on('player-state-response', (_, data) => {
+  // Forward to main window
+  if (win) {
+    win.webContents.send('player-state-response', data)
   }
 })
