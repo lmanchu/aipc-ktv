@@ -3,6 +3,7 @@ import UpdateElectron from './components/update'
 import { useYouTubePlayer } from './hooks/useYouTubePlayer'
 import { useQueueStore } from './store'
 import { PlaybackState } from '../shared/types'
+import SearchPanel from './components/search/SearchPanel'
 import './App.css'
 
 function App() {
@@ -91,7 +92,12 @@ function App() {
         <p className="text-lg text-gray-600 mt-2">Karaoke Control Center</p>
       </header>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Search Panel - Full width on mobile, 1/3 on large screens */}
+        <div className="card lg:col-span-4">
+          <SearchPanel />
+        </div>
+        
         {/* Display Window Management */}
         <div className="card">
           <h2 className="text-xl font-semibold mb-4">Display Window</h2>
