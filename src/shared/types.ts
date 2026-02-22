@@ -15,7 +15,7 @@ export interface Song {
  * Playback state enumeration
  */
 export enum PlaybackState {
-  STOPPED = 'stopped',
+  IDLE = 'idle',
   PLAYING = 'playing',
   PAUSED = 'paused',
   LOADING = 'loading',

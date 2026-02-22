@@ -3,11 +3,26 @@ import { devtools, persist } from 'zustand/middleware'
 import type { Song, Playlist } from '../types'
 import { useQueueStore } from './queueStore'
 
+interface PlaylistActions {
+  createPlaylist: (name: string, songs?: Song[]) => Playlist
+  deletePlaylist: (id: string) => void
+  addSongToPlaylist: (playlistId: string, song: Song) => void
+  removeSongFromPlaylist: (playlistId: string, songIndex: number) => void
+  loadPlaylistToQueue: (playlistId: string, replace?: boolean) => void
+  updatePlaylistName: (id: string, name: string) => void
+  renamePlaylist: (id: string, name: string) => void
+  moveSongInPlaylist: (playlistId: string, fromIndex: number, toIndex: number) => void
+  getPlaylist: (id: string) => Playlist | undefined
+  clearPlaylist: (id: string) => void
+}
+
 interface PlaylistStore {
   playlists: Playlist[]
 }
 
-export const usePlaylistStore = create<PlaylistStore & PlaylistActions>()(
+interface PlaylistStoreWithActions extends PlaylistStore, PlaylistActions {}
+
+export const usePlaylistStore = create<PlaylistStoreWithActions>()(
   devtools(
     persist(
       (set, get) => ({

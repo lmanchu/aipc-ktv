@@ -3,6 +3,20 @@ import { devtools } from 'zustand/middleware'
 import type { Song, Queue } from '../types'
 import { PlaybackState } from '../types'
 
+interface QueueActions {
+  addSong: (song: Song) => void
+  removeSong: (index: number) => void
+  nextSong: () => void
+  clearQueue: () => void
+  reorderQueue: (fromIndex: number, toIndex: number) => void
+  setPlaybackState: (state: PlaybackState) => void
+  playQueue: () => void
+  playNext: () => void
+  setCurrentSong: (song: Song | null) => void
+  shuffleQueue: () => void
+  moveInQueue: (fromIndex: number, toIndex: number) => void
+}
+
 interface QueueStore extends Queue, QueueActions {}
 
 export const useQueueStore = create<QueueStore>()(
@@ -17,7 +31,6 @@ export const useQueueStore = create<QueueStore>()(
       addSong: (song: Song) =>
         set(
           (state) => ({
-            ...state,
             upcomingSongs: [...state.upcomingSongs, song],
           }),
           false,
@@ -29,7 +42,7 @@ export const useQueueStore = create<QueueStore>()(
           (state) => {
             const newUpcomingSongs = [...state.upcomingSongs]
             newUpcomingSongs.splice(index, 1)
-            return { ...state, upcomingSongs: newUpcomingSongs }
+            return { upcomingSongs: newUpcomingSongs }
           },
           false,
           'removeSong'
@@ -40,7 +53,6 @@ export const useQueueStore = create<QueueStore>()(
           (state) => {
             if (state.upcomingSongs.length === 0) {
               return {
-                ...state,
                 currentSong: null,
                 playbackState: PlaybackState.IDLE,
               }
@@ -48,7 +60,6 @@ export const useQueueStore = create<QueueStore>()(
 
             const [nextSong, ...remainingSongs] = state.upcomingSongs
             return {
-              ...state,
               currentSong: nextSong,
               upcomingSongs: remainingSongs,
               playbackState: PlaybackState.LOADING,
@@ -60,12 +71,11 @@ export const useQueueStore = create<QueueStore>()(
 
       clearQueue: () =>
         set(
-          (state) => ({
-            ...state,
+          {
             currentSong: null,
             upcomingSongs: [],
             playbackState: PlaybackState.IDLE,
-          }),
+          },
           false,
           'clearQueue'
         ),
@@ -76,7 +86,7 @@ export const useQueueStore = create<QueueStore>()(
             const newUpcomingSongs = [...state.upcomingSongs]
             const [movedSong] = newUpcomingSongs.splice(fromIndex, 1)
             newUpcomingSongs.splice(toIndex, 0, movedSong)
-            return { ...state, upcomingSongs: newUpcomingSongs }
+            return { upcomingSongs: newUpcomingSongs }
           },
           false,
           'reorderQueue'
@@ -84,7 +94,7 @@ export const useQueueStore = create<QueueStore>()(
 
       setPlaybackState: (playbackState: PlaybackState) =>
         set(
-          (state) => ({ ...state, playbackState }),
+          { playbackState },
           false,
           'setPlaybackState'
         ),
@@ -94,6 +104,43 @@ export const useQueueStore = create<QueueStore>()(
         if (state.upcomingSongs.length > 0 && !state.currentSong) {
           state.nextSong()
         }
+      },
+
+      // Additional methods expected by tests
+      playNext: () => {
+        // Alias for nextSong for backward compatibility
+        const state = get()
+        state.nextSong()
+      },
+
+      setCurrentSong: (song: Song | null) =>
+        set(
+          {
+            currentSong: song,
+            playbackState: song ? PlaybackState.LOADING : PlaybackState.IDLE,
+          },
+          false,
+          'setCurrentSong'
+        ),
+
+      shuffleQueue: () =>
+        set(
+          (state) => {
+            const shuffled = [...state.upcomingSongs]
+            for (let i = shuffled.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1))
+              ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+            }
+            return { upcomingSongs: shuffled }
+          },
+          false,
+          'shuffleQueue'
+        ),
+
+      moveInQueue: (fromIndex: number, toIndex: number) => {
+        // Alias for reorderQueue for backward compatibility
+        const state = get()
+        state.reorderQueue(fromIndex, toIndex)
       },
     }),
     {
