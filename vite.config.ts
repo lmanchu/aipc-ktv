@@ -19,6 +19,14 @@ export default defineConfig(({ command }) => {
         '@': path.join(__dirname, 'src')
       },
     },
+    build: {
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          display: path.resolve(__dirname, 'display.html')
+        }
+      }
+    },
     plugins: [
       react(),
       electron({

@@ -1,45 +1,46 @@
 import { useState } from 'react'
 import UpdateElectron from './components/update'
-import logoVite from './assets/logo-vite.svg'
-import logoElectron from './assets/logo-electron.svg'
 import './App.css'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [connectionStatus, setConnectionStatus] = useState('Ready')
+  
   return (
     <div className="App">
-      <div className="logo-box">
-        <a
-          href="https://github.com/electron-vite/electron-vite-react"
-          target="_blank"
-        >
-          <img
-            src={logoVite}
-            className="logo vite"
-            alt="Electron + Vite logo"
-          />
-          <img
-            src={logoElectron}
-            className="logo electron"
-            alt="Electron + Vite logo"
-          />
-        </a>
+      <header className="mb-8">
+        <h1 className="text-3xl font-bold text-blue-600">AIPC KTV Control</h1>
+        <p className="text-lg text-gray-600 mt-2">Karaoke Control Center</p>
+      </header>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="card">
+          <h2 className="text-xl font-semibold mb-4">Display Status</h2>
+          <div className="status-indicator">
+            <span className="inline-block w-3 h-3 bg-green-500 rounded-full mr-2"></span>
+            <span>Display Window: {connectionStatus}</span>
+          </div>
+        </div>
+        
+        <div className="card">
+          <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
+          <div className="space-y-2">
+            <button 
+              className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              onClick={() => setConnectionStatus('Testing...')}
+            >
+              Test Display Connection
+            </button>
+          </div>
+        </div>
       </div>
-      <h1>Electron + Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Electron + Vite logo to learn more
-      </p>
-      <div className="flex-center">
-        Place static files into the<code>/public</code> folder{' '}
-        <img style={{ width: '5em' }} src="./node.svg" alt="Node logo" />
+      
+      <div className="mt-8">
+        <div className="card">
+          <h2 className="text-xl font-semibold mb-4">System Info</h2>
+          <p className="text-sm text-gray-500">
+            Control window for dual-screen karaoke system
+          </p>
+        </div>
       </div>
 
       <UpdateElectron />
