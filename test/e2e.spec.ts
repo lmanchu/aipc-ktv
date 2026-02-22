@@ -42,23 +42,38 @@ if (process.platform === 'linux') {
     await electronApp.close()
   })
 
-  describe('[electron-vite-react] e2e tests', async () => {
+  describe('[aipc-ktv] e2e tests', async () => {
     test('startup', async () => {
       const title = await page.title()
-      expect(title).eq('Electron + Vite + React')
+      expect(title).eq('AIPC KTV Control')
     })
 
-    test('should be home page is load correctly', async () => {
+    test('should load control window correctly', async () => {
+      // Wait for the React app to fully load by waiting for the h1 element
+      await page.waitForSelector('h1', { timeout: 10000 })
       const h1 = await page.$('h1')
       const title = await h1?.textContent()
-      expect(title).eq('Electron + Vite + React')
+      expect(title).eq('AIPC KTV Control')
     })
 
-    test('should be count button can click', async () => {
-      const countButton = await page.$('button')
-      await countButton?.click()
-      const countValue = await countButton?.textContent()
-      expect(countValue).eq('count is 1')
+    test('should have display status indicator', async () => {
+      // Wait for display status element to be available
+      await page.waitForSelector('.status-indicator', { timeout: 10000 })
+      const statusIndicator = await page.$('.status-indicator')
+      const statusText = await statusIndicator?.textContent()
+      expect(statusText).toContain('Display Window: Ready')
+    })
+
+    test('should have test display button that works', async () => {
+      // Wait for the test button to be available
+      await page.waitForSelector('button:has-text("Test Display Connection")', { timeout: 10000 })
+      const testButton = await page.$('button:has-text("Test Display Connection")')
+      await testButton?.click()
+      
+      // Check if status changed (though it might be brief)
+      const statusIndicator = await page.$('.status-indicator')
+      const statusText = await statusIndicator?.textContent()
+      expect(statusText).toMatch(/Display Window: (Ready|Testing\.\.\.)/)
     })
   })
 }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, screen } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -40,21 +40,21 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let win: BrowserWindow | null = null
+let displayWin: BrowserWindow | null = null
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
+const displayHtml = path.join(RENDERER_DIST, 'display.html')
 
 async function createWindow() {
   win = new BrowserWindow({
-    title: 'Main window',
+    title: 'AIPC KTV - Control',
+    width: 800,
+    height: 600,
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
     webPreferences: {
       preload,
-      // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production
-      // nodeIntegration: true,
-
-      // Consider using contextBridge.exposeInMainWorld
-      // Read more on https://www.electronjs.org/docs/latest/tutorial/context-isolation
-      // contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
     },
   })
 
@@ -81,11 +81,96 @@ async function createWindow() {
   update(win)
 }
 
+async function createDisplayWindow() {
+  if (displayWin) return displayWin
+
+  // Get all displays
+  const displays = screen.getAllDisplays()
+  const primaryDisplay = screen.getPrimaryDisplay()
+
+  let displayConfig: {
+    x?: number
+    y?: number
+    width: number
+    height: number
+    fullscreen?: boolean
+  }
+
+  if (displays.length > 1) {
+    // Multi-monitor setup: find external display and go fullscreen
+    const externalDisplay = displays.find(display => 
+      display.bounds.x !== primaryDisplay.bounds.x || 
+      display.bounds.y !== primaryDisplay.bounds.y
+    )
+
+    if (externalDisplay) {
+      displayConfig = {
+        x: externalDisplay.bounds.x,
+        y: externalDisplay.bounds.y,
+        width: externalDisplay.bounds.width,
+        height: externalDisplay.bounds.height,
+        fullscreen: true,
+      }
+    } else {
+      // Fallback to fullscreen on primary if no external found
+      displayConfig = {
+        width: primaryDisplay.bounds.width,
+        height: primaryDisplay.bounds.height,
+        fullscreen: true,
+      }
+    }
+  } else {
+    // Single monitor setup: open windowed on primary display
+    displayConfig = {
+      width: 1280,
+      height: 720,
+    }
+  }
+
+  displayWin = new BrowserWindow({
+    title: 'AIPC KTV - Display',
+    icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
+    ...displayConfig,
+    webPreferences: {
+      preload,
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: false, // Allow YouTube iframe
+    },
+  })
+
+  if (VITE_DEV_SERVER_URL) {
+    displayWin.loadURL(`${VITE_DEV_SERVER_URL}display.html`)
+    displayWin.webContents.openDevTools()
+  } else {
+    displayWin.loadFile(displayHtml)
+  }
+
+  displayWin.on('closed', () => {
+    displayWin = null
+  })
+
+  return displayWin
+}
+
 app.whenReady().then(createWindow)
 
 app.on('window-all-closed', () => {
   win = null
+  displayWin = null
   if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('before-quit', () => {
+  // Clean up all windows
+  if (displayWin) {
+    displayWin.close()
+    displayWin = null
+  }
+  if (win) {
+    win.close()
+    win = null
+  }
 })
 
 app.on('second-instance', () => {
@@ -119,5 +204,88 @@ ipcMain.handle('open-win', (_, arg) => {
     childWindow.loadURL(`${VITE_DEV_SERVER_URL}#${arg}`)
   } else {
     childWindow.loadFile(indexHtml, { hash: arg })
+  }
+})
+
+// Dual Window Management IPC Handlers
+ipcMain.handle('open-display-window', async () => {
+  try {
+    const display = await createDisplayWindow()
+    const displays = screen.getAllDisplays()
+    const isMultiMonitor = displays.length > 1
+    
+    return { 
+      success: true, 
+      windowId: display.id,
+      isMultiMonitor,
+      displayCount: displays.length
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { success: false, error: message }
+  }
+})
+
+ipcMain.handle('close-display-window', () => {
+  if (displayWin) {
+    displayWin.close()
+    displayWin = null
+    return { success: true }
+  }
+  return { success: false, error: 'Display window not found' }
+})
+
+// Player Control IPC - enhanced with validation
+ipcMain.handle('youtube-player-control', (_, command: string, ...args: any[]) => {
+  if (!displayWin) {
+    return { success: false, error: 'Display window not available' }
+  }
+
+  const validCommands = ['play', 'pause', 'stop', 'next', 'queue-update', 'load-video', 'seek', 'volume', 'mute']
+  if (!validCommands.includes(command)) {
+    return { success: false, error: `Invalid command: ${command}` }
+  }
+
+  try {
+    displayWin.webContents.send('youtube-player-control', command, ...args)
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { success: false, error: message }
+  }
+})
+
+// Handle messages from display window to control window
+ipcMain.on('video-ended', () => {
+  if (win) {
+    win.webContents.send('video-ended')
+  }
+})
+
+ipcMain.on('player-state-response', (_, data) => {
+  if (win) {
+    win.webContents.send('player-state-response', data)
+  }
+})
+
+ipcMain.on('queue-update-request', (_, queueData) => {
+  if (win) {
+    win.webContents.send('queue-update-request', queueData)
+  }
+})
+
+// Get display information for debugging/status
+ipcMain.handle('get-display-info', () => {
+  const displays = screen.getAllDisplays()
+  const primaryDisplay = screen.getPrimaryDisplay()
+  return {
+    displays: displays.map(d => ({
+      id: d.id,
+      bounds: d.bounds,
+      size: d.size,
+      scaleFactor: d.scaleFactor,
+      primary: d === primaryDisplay
+    })),
+    displayWindowOpen: !!displayWin
   }
 })

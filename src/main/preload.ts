@@ -1,6 +1,37 @@
 import { ipcRenderer, contextBridge } from 'electron'
 
 // --------- Expose some API to the Renderer process ---------
+contextBridge.exposeInMainWorld('electron', {
+  ipcRenderer: {
+    on(channel: string, listener: (...args: any[]) => void) {
+      return ipcRenderer.on(channel, (event, ...args) => listener(...args))
+    },
+    off(channel: string, listener?: (...args: any[]) => void) {
+      if (listener) {
+        return ipcRenderer.removeListener(channel, listener)
+      } else {
+        return ipcRenderer.removeAllListeners(channel)
+      }
+    },
+    removeAllListeners(channel: string) {
+      return ipcRenderer.removeAllListeners(channel)
+    },
+    sendMessage(channel: string, ...args: any[]) {
+      return ipcRenderer.send(channel, ...args)
+    },
+    invoke(channel: string, ...args: any[]) {
+      return ipcRenderer.invoke(channel, ...args)
+    },
+  },
+  
+  youtubePlayer: {
+    openDisplayWindow: () => ipcRenderer.invoke('open-display-window'),
+    closeDisplayWindow: () => ipcRenderer.invoke('close-display-window'),
+    control: (command: string, ...args: any[]) => ipcRenderer.invoke('youtube-player-control', command, ...args),
+  }
+})
+
+// Legacy support - keep the old ipcRenderer exposure
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {
     const [channel, listener] = args
