@@ -1,0 +1,289 @@
+STATUS: done
+CHANGES: Created LMA-17-user-stories.md with 17 ordered user stories, committed to patlabor/lma-17 branch
+TESTS: N/A (documentation phase only)
+NOTES:
+- Repository: ~/Dropbox/Dev/aipc-ktv
+- Branch: patlabor/lma-17
+- All stories ordered by dependency: storage layer → IPC handlers → store migration → packaging → testing → documentation
+- Each story includes mechanically verifiable acceptance criteria and "Typecheck passes" as final criterion
+- Stories designed to fit within single developer session (one context window)
+- Test requirements included for all stories
+
+STORIES_JSON: [
+  {
+    "id": "1.0",
+    "title": "Setup File-Based Storage Service in Main Process",
+    "priority": "High",
+    "dependency": "None",
+    "description": "Create a file-based storage service module in the Electron main process to handle persistent data storage using Node.js fs and path modules.",
+    "acceptanceCriteria": [
+      "StorageService class is defined in src/main/storage.ts",
+      "Service can read/write JSON files to userData directory",
+      "Service handles file not found errors gracefully",
+      "Service creates directories if they don't exist",
+      "All file operations use async/await",
+      "Unit tests for StorageService pass",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "2.0",
+    "title": "Create IPC Handlers for Storage Operations",
+    "priority": "High",
+    "dependency": "1.0",
+    "description": "Add IPC handlers in main process to expose storage operations to renderer process through preload API.",
+    "acceptanceCriteria": [
+      "IPC handlers added in src/main/index.ts for all storage operations",
+      "Storage API exposed via contextBridge in preload",
+      "TypeScript types defined for storage operations",
+      "Renderer can invoke storage operations via window.electron.storage",
+      "All handlers include proper error handling and validation",
+      "Unit tests for IPC handlers pass",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "3.0",
+    "title": "Migrate Playlist Store to File-Based Storage",
+    "priority": "High",
+    "dependency": "2.0",
+    "description": "Update playlistStore.ts to use file-based storage via IPC instead of Zustand persist middleware with localStorage.",
+    "acceptanceCriteria": [
+      "persist middleware removed from playlistStore",
+      "playlistStorage.ts service created with save/load methods",
+      "PlaylistStore initialized from file on startup",
+      "Playlist mutations trigger file save",
+      "Storage errors caught and handled with user feedback",
+      "Tests for playlistStorage service pass",
+      "Tests for playlistStore integration pass",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "4.0",
+    "title": "Add Queue Persistence Support",
+    "priority": "Medium",
+    "dependency": "2.0",
+    "description": "Add optional file-based persistence for the playback queue to restore queue state on app restart.",
+    "acceptanceCriteria": [
+      "queueStorage.ts service created with save/load methods",
+      "QueueStore loads queue from file on startup if enabled",
+      "Queue mutations trigger file save",
+      "User preference added to enable/disable queue persistence",
+      "Queue state restored correctly on app restart when enabled",
+      "Tests for queueStorage service pass",
+      "Tests for queueStore integration pass",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "5.0",
+    "title": "Create Data Migration Utility",
+    "priority": "Medium",
+    "dependency": "2.0, 3.0",
+    "description": "Create a utility to migrate existing playlist data from localStorage to file-based storage for existing users.",
+    "acceptanceCriteria": [
+      "storageMigration.ts service created",
+      "Migration check runs on app startup",
+      "Migration prompt shown to users with existing data",
+      "LocalStorage data successfully migrated to file storage",
+      "LocalStorage cleared after successful migration",
+      "Migration status logged to console",
+      "Tests for migration utility pass",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "6.0",
+    "title": "Update electron-builder Configuration for Mac",
+    "priority": "High",
+    "dependency": "None",
+    "description": "Review and update electron-builder.yml configuration to ensure proper macOS .dmg packaging.",
+    "acceptanceCriteria": [
+      "electron-builder.yml has correct macOS configuration",
+      "appId set to com.aipc.ktv",
+      "macOS category set correctly",
+      "Icon path points to valid .icns file",
+      "Target configured for .dmg with x64 and arm64",
+      "ArtifactName format is consistent",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "7.0",
+    "title": "Update electron-builder Configuration for Windows",
+    "priority": "High",
+    "dependency": "None",
+    "description": "Review and update electron-builder.yml configuration to ensure proper Windows .exe packaging.",
+    "acceptanceCriteria": [
+      "electron-builder.yml has correct Windows configuration",
+      "Icon path points to valid .ico file",
+      "Target configured for .exe with NSIS installer",
+      "NSIS options configured correctly",
+      "ArtifactName format is consistent",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "8.0",
+    "title": "Test Mac Packaging (DMG Build)",
+    "priority": "High",
+    "dependency": "6.0",
+    "description": "Build and test the macOS .dmg package to ensure it works correctly.",
+    "acceptanceCriteria": [
+      "npm run dist:mac completes successfully",
+      ".dmg file created in release directory",
+      ".dmg can be opened and app installed",
+      "App launches without errors",
+      "App icon displays correctly",
+      "Basic functionality works in packaged app",
+      "File-based storage operations work correctly",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "9.0",
+    "title": "Verify Windows Packaging Configuration (EXE Build)",
+    "priority": "High",
+    "dependency": "7.0",
+    "description": "Verify Windows packaging configuration is correct (actual build requires Windows environment).",
+    "acceptanceCriteria": [
+      "Windows configuration in electron-builder.yml is complete",
+      "Icon.ico file exists and is valid format",
+      "NSIS settings are properly configured",
+      "Build requirements documented in README or docs",
+      "Manual testing steps documented",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "10.0",
+    "title": "Verify electron-updater Configuration",
+    "priority": "High",
+    "dependency": "None",
+    "description": "Review and verify that electron-updater is properly configured for auto-update functionality.",
+    "acceptanceCriteria": [
+      "electron-builder.yml has correct publish configuration",
+      "Auto-update handlers properly configured in update.ts",
+      "Preload exposes update API correctly",
+      "Renderer update UI exists",
+      "Update check works and returns appropriate response",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "11.0",
+    "title": "Test Auto-Update Check Functionality",
+    "priority": "Medium",
+    "dependency": "10.0",
+    "description": "Test that auto-update check functionality works correctly in packaged app.",
+    "acceptanceCriteria": [
+      "Update check returns appropriate response in development",
+      "Update check works in packaged app",
+      "Update events fire correctly (available, not available, error)",
+      "Download progress updates correctly",
+      "Quit-and-install works correctly",
+      "Update UI displays correct version info",
+      "Tests for update functionality pass",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "12.0",
+    "title": "Create Storage Layer Unit Tests",
+    "priority": "Medium",
+    "dependency": "1.0",
+    "description": "Write comprehensive unit tests for the file-based storage service.",
+    "acceptanceCriteria": [
+      "storage.test.ts created with comprehensive tests",
+      "All StorageService methods tested",
+      "Success and error scenarios covered",
+      "Code coverage > 80% for storage service",
+      "All tests pass",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "13.0",
+    "title": "Create IPC Handler Tests",
+    "priority": "Medium",
+    "dependency": "2.0",
+    "description": "Write unit tests for storage-related IPC handlers.",
+    "acceptanceCriteria": [
+      "storage-ipc.test.ts created with comprehensive tests",
+      "All storage IPC handlers tested",
+      "Error handling and validation tested",
+      "Data serialization through IPC tested",
+      "All tests pass",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "14.0",
+    "title": "Integration Test for Storage Migration",
+    "priority": "Medium",
+    "dependency": "5.0",
+    "description": "Write integration tests for the localStorage to file-based storage migration.",
+    "acceptanceCriteria": [
+      "storageMigration.test.ts created with comprehensive tests",
+      "Migration detection tested",
+      "Data transfer tested",
+      "LocalStorage cleanup tested",
+      "Error handling tested",
+      "Data integrity verified",
+      "All tests pass",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "15.0",
+    "title": "End-to-End Integration Test",
+    "priority": "Low",
+    "dependency": "3.0, 4.0, 5.0",
+    "description": "Write end-to-end tests for the complete storage system (file-based storage, migration, packaging).",
+    "acceptanceCriteria": [
+      "E2E test file created with comprehensive scenarios",
+      "App initialization tested",
+      "Playlist save/restore tested",
+      "Migration flow tested",
+      "Queue persistence tested",
+      "Tests run in development environment",
+      "All tests pass",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "16.0",
+    "title": "Update Documentation",
+    "priority": "Medium",
+    "dependency": "All stories",
+    "description": "Update project documentation to reflect file-based storage and packaging changes.",
+    "acceptanceCriteria": [
+      "README.md updated with storage and packaging info",
+      "docs/PACKAGING.md created with detailed packaging guide",
+      "PATLABOR_SPEC.md updated to reflect changes",
+      "All documentation is accurate and clear",
+      "Documentation includes examples where helpful",
+      "Typecheck passes"
+    ]
+  },
+  {
+    "id": "17.0",
+    "title": "Final Integration and Testing",
+    "priority": "High",
+    "dependency": "All previous stories",
+    "description": "Perform final integration testing and ensure all components work together correctly.",
+    "acceptanceCriteria": [
+      "All unit tests pass",
+      "All integration tests pass",
+      "Mac .dmg builds successfully",
+      "Packaged app works correctly",
+      "File-based storage operations work in packaged app",
+      "Auto-update check works in packaged app",
+      "Migration flow works correctly",
+      "No console errors or warnings",
+      "All acceptance criteria met",
+      "Typecheck passes"
+    ]
+  }
+]
