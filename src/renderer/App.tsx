@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react'
 import UpdateElectron from './components/update'
 import { useYouTubePlayer } from './hooks/useYouTubePlayer'
-import { useQueueStore, usePreferenceStore } from './store'
+import { useQueueStore, usePreferenceStore, usePlaylistStore } from './store'
 import { PlaybackState } from '../shared/types'
 import SearchPanel from './components/search/SearchPanel'
+import { storageMigrationService } from './services/storageMigration'
 import './App.css'
 
 function App() {
   const [testVideoId, setTestVideoId] = useState('dQw4w9WgXcQ') // Rick Roll for testing
   const [seekTime, setSeekTime] = useState(0)
   const [volume, setVolume] = useState(50)
+  const [showMigrationPrompt, setShowMigrationPrompt] = useState(false)
+  const [migrationStatus, setMigrationStatus] = useState<string | null>(null)
+  const [isMigrating, setIsMigrating] = useState(false)
 
   const {
     isDisplayWindowOpen,
@@ -38,9 +42,12 @@ function App() {
   } = useQueueStore()
 
   const { persistQueue, setQueuePersistence } = usePreferenceStore()
+  const { initialize: initializePlaylists } = usePlaylistStore()
 
   useEffect(() => {
     initialize()
+    initializePlaylists()
+    checkMigrationNeeded()
   }, [])
 
   // Listen for player state changes from display window
@@ -91,9 +98,92 @@ function App() {
     setVolume(newVolume)
     setPlayerVolume(newVolume)
   }
-  
+
+  const checkMigrationNeeded = async () => {
+    try {
+      const status = await storageMigrationService.checkMigrationStatus()
+      if (status.needsMigration) {
+        console.log('[App] Migration needed, showing prompt to user')
+        setShowMigrationPrompt(true)
+        setMigrationStatus(
+          `Found ${status.hasLocalStorageData ? 'existing playlist data' : 'data'} in localStorage. Would you like to migrate it to file-based storage?`
+        )
+      }
+    } catch (error) {
+      console.error('[App] Error checking migration status:', error)
+    }
+  }
+
+  const handleMigration = async () => {
+    setIsMigrating(true)
+    setMigrationStatus('Migrating data...')
+    
+    try {
+      const result = await storageMigrationService.migrate()
+      
+      if (result.success) {
+        setMigrationStatus(result.message)
+        console.log('[App] Migration result:', result.message)
+        
+        if (result.migrated) {
+          setTimeout(() => {
+            setShowMigrationPrompt(false)
+            setIsMigrating(false)
+            initializePlaylists()
+          }, 2000)
+        } else {
+          setTimeout(() => {
+            setShowMigrationPrompt(false)
+            setIsMigrating(false)
+          }, 2000)
+        }
+      } else {
+        setMigrationStatus(`Migration failed: ${result.error || result.message}`)
+        console.error('[App] Migration failed:', result.error)
+        setIsMigrating(false)
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setMigrationStatus(`Migration error: ${message}`)
+      console.error('[App] Migration error:', error)
+      setIsMigrating(false)
+    }
+  }
+
+  const skipMigration = () => {
+    console.log('[App] User chose to skip migration')
+    setShowMigrationPrompt(false)
+    setMigrationStatus(null)
+  }
+
   return (
-    <div className="App">
+    <>
+      {showMigrationPrompt && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-xl">
+            <h2 className="text-xl font-bold mb-4">Data Migration Required</h2>
+            <p className="text-gray-700 mb-6">{migrationStatus}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 disabled:opacity-50"
+                onClick={skipMigration}
+                disabled={isMigrating}
+              >
+                Skip
+              </button>
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                onClick={handleMigration}
+                disabled={isMigrating}
+              >
+                {isMigrating ? 'Migrating...' : 'Migrate Data'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="App">
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-blue-600">AIPC KTV Control</h1>
         <p className="text-lg text-gray-600 mt-2">Karaoke Control Center</p>
@@ -344,6 +434,7 @@ function App() {
 
       <UpdateElectron />
     </div>
+    </>
   )
 }
 
