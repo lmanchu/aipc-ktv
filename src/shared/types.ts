@@ -1,6 +1,47 @@
 // AIPC KTV - Shared Type Definitions
 
 /**
+ * Interface for the storage API exposed via Electron's contextBridge.
+ * This defines the contract for renderer process to interact with main process storage.
+ */
+export interface StorageIPC {
+  read: <T>(filename: string) => Promise<{ success: boolean; data?: T | null; error?: string }>;
+  write: <T>(filename: string, data: T) => Promise<{ success: boolean; error?: string }>;
+  exists: (filename: string) => Promise<{ success: boolean; exists?: boolean; error?: string }>;
+  delete: (filename: string) => Promise<{ success: boolean; error?: string }>;
+  ensureDirectory: (directory: string) => Promise<{ success: boolean; error?: string }>;
+}
+
+/**
+ * Interface for the YouTube Player API exposed via Electron's contextBridge.
+ */
+export interface YouTubePlayerIPC {
+  openDisplayWindow: () => Promise<{ success: boolean; windowId?: number; error?: string }>;
+  closeDisplayWindow: () => Promise<{ success: boolean; error?: string }>;
+  control: (command: string, ...args: any[]) => Promise<{ success: boolean; error?: string }>;
+}
+
+/**
+ * Interface for the IPC Renderer API exposed via Electron's contextBridge.
+ */
+export interface IpcRendererIPC {
+  on: (channel: string, listener: (...args: any[]) => void) => Electron.IpcRenderer;
+  off: (channel: string, listener?: (...args: any[]) => void) => Electron.IpcRenderer;
+  removeAllListeners: (channel: string) => Electron.IpcRenderer;
+  sendMessage: (channel: string, ...args: any[]) => void;
+  invoke: (channel: string, ...args: any[]) => Promise<any>;
+}
+
+/**
+ * Combined Electron API exposed to the renderer process.
+ */
+export interface ElectronAPI {
+  ipcRenderer: IpcRendererIPC;
+  youtubePlayer: YouTubePlayerIPC;
+  storage: StorageIPC;
+}
+
+/**
  * Song interface for queue and playlist management
  */
 export interface Song {

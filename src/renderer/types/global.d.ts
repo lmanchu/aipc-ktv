@@ -55,9 +55,18 @@ export interface ElectronYouTubePlayerAPI {
   control: (command: string, ...args: any[]) => Promise<{ success: boolean; error?: string }>
 }
 
+export interface ElectronStorageAPI {
+  read<T = any>(filename: string): Promise<{ success: boolean; data?: T | null; error?: string }>
+  write<T = any>(filename: string, data: T): Promise<{ success: boolean; error?: string }>
+  exists(filename: string): Promise<{ success: boolean; exists?: boolean; error?: string }>
+  delete(filename: string): Promise<{ success: boolean; error?: string }>
+  ensureDirectory(directory: string): Promise<{ success: boolean; error?: string }>
+}
+
 export interface ElectronAPI {
   ipcRenderer: ElectronIpcRenderer
   youtubePlayer: ElectronYouTubePlayerAPI
+  storage: ElectronStorageAPI
 }
 
 // Global window extensions

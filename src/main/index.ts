@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import { update } from './update'
+import { getStorageService } from './storage'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -235,5 +236,76 @@ ipcMain.on('player-state-changed', (_, state: any) => {
   // Forward real-time state changes to main window
   if (win) {
     win.webContents.send('player-state-changed', state)
+  }
+})
+
+// Storage IPC Handlers
+const storage = getStorageService()
+
+ipcMain.handle('storage-read', async (_, filename: string) => {
+  try {
+    if (!filename || typeof filename !== 'string') {
+      return { success: false, error: 'Invalid filename' }
+    }
+    const data = await storage.read(filename)
+    return { success: true, data }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { success: false, error: message }
+  }
+})
+
+ipcMain.handle('storage-write', async (_, filename: string, data: any) => {
+  try {
+    if (!filename || typeof filename !== 'string') {
+      return { success: false, error: 'Invalid filename' }
+    }
+    if (data === undefined) {
+      return { success: false, error: 'Data cannot be undefined' }
+    }
+    await storage.write(filename, data)
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { success: false, error: message }
+  }
+})
+
+ipcMain.handle('storage-exists', async (_, filename: string) => {
+  try {
+    if (!filename || typeof filename !== 'string') {
+      return { success: false, error: 'Invalid filename' }
+    }
+    const exists = await storage.exists(filename)
+    return { success: true, exists }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { success: false, error: message }
+  }
+})
+
+ipcMain.handle('storage-delete', async (_, filename: string) => {
+  try {
+    if (!filename || typeof filename !== 'string') {
+      return { success: false, error: 'Invalid filename' }
+    }
+    await storage.delete(filename)
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { success: false, error: message }
+  }
+})
+
+ipcMain.handle('storage-ensure-directory', async (_, directory: string) => {
+  try {
+    if (!directory || typeof directory !== 'string') {
+      return { success: false, error: 'Invalid directory path' }
+    }
+    await storage.ensureDirectory(directory)
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { success: false, error: message }
   }
 })

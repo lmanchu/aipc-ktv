@@ -28,6 +28,14 @@ contextBridge.exposeInMainWorld('electron', {
     openDisplayWindow: () => ipcRenderer.invoke('open-display-window'),
     closeDisplayWindow: () => ipcRenderer.invoke('close-display-window'),
     control: (command: string, ...args: any[]) => ipcRenderer.invoke('youtube-player-control', command, ...args),
+  },
+
+  storage: {
+    read: <T>(filename: string) => ipcRenderer.invoke('storage-read', filename) as Promise<{ success: boolean; data?: T | null; error?: string }>,
+    write: <T>(filename: string, data: T) => ipcRenderer.invoke('storage-write', filename, data) as Promise<{ success: boolean; error?: string }>,
+    exists: (filename: string) => ipcRenderer.invoke('storage-exists', filename) as Promise<{ success: boolean; exists?: boolean; error?: string }>,
+    delete: (filename: string) => ipcRenderer.invoke('storage-delete', filename) as Promise<{ success: boolean; error?: string }>,
+    ensureDirectory: (directory: string) => ipcRenderer.invoke('storage-ensure-directory', directory) as Promise<{ success: boolean; error?: string }>,
   }
 })
 
