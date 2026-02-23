@@ -1663,6 +1663,125 @@ describe('Documentation Verification', () => {
 
 ---
 
-## Stories Remaining: 6
+## ✅ Story 13.0: Create IPC Handler Tests
 
-## Next Story: Story 13.0 - [To be defined]
+**Status**: COMPLETED
+**Date**: 2026-02-24 04:40:00 GMT+8
+**Commit**: a6d1748
+
+**Implemented**:
+1. ✅ Created comprehensive test suite (test/story-13-storage-ipc.test.ts) with 60 tests covering:
+    - IPC Handler Registration (5 tests)
+    - storage-read Handler (6 tests)
+    - storage-write Handler (6 tests)
+    - storage-exists Handler (5 tests)
+    - storage-delete Handler (5 tests)
+    - storage-ensure-directory Handler (6 tests)
+    - Data Serialization Through IPC (10 tests)
+    - Error Handling and Edge Cases (6 tests)
+    - Operation Sequences and Integration (6 tests)
+    - Return Value Format Consistency (5 tests)
+
+2. ✅ Comprehensive test coverage for all storage IPC handlers:
+    - storage-read: Test reading existing files, non-existent files, filename validation, special characters, nested paths
+    - storage-write: Test writing data, filename validation, data validation (reject undefined), null data, overwriting, nested paths
+    - storage-exists: Test checking file existence for existing and non-existent files, validation, nested paths
+    - storage-delete: Test deleting existing and non-existent files, validation, nested paths
+    - storage-ensure-directory: Test creating directories, nested directories, existing directories, validation, writing to created directories
+
+3. ✅ Data serialization tested through IPC:
+    - Objects (simple, nested, complex)
+    - Arrays (simple, nested, large)
+    - Primitives (strings, numbers, booleans, null)
+    - Empty structures (empty objects, empty arrays)
+    - Complex nested structures
+    - Special characters (Unicode, emoji, quotes, whitespace)
+    - Data type preservation through serialization
+
+4. ✅ Error handling and edge cases tested:
+    - Circular reference errors
+    - Extremely large datasets (10,000 items)
+    - Deeply nested structures (100 levels)
+    - Special path characters in filenames
+    - Missing arguments
+    - Malformed JSON files
+
+5. ✅ Operation sequences and integration tested:
+    - Write-read-delete lifecycle
+    - Create directory, write, read sequence
+    - Multiple writes to same file
+    - Check existence before operations
+    - Complex multi-file operations
+    - Rapid consecutive operations (50 parallel operations)
+
+6. ✅ Return value format consistency verified:
+    - Success responses include data property
+    - Error responses include error message
+    - All responses include success boolean
+    - Non-existent file returns success:true with null data
+
+**Key Implementation Details**:
+- Tests simulate IPC handler logic without actually registering handlers
+- Validates input parameters (filename, data, directory)
+- Tests error catching and conversion to error messages
+- Verifies consistent return format: { success: boolean, data?: any, error?: string }
+- Tests all data types and edge cases
+- Tests operation sequences and integration scenarios
+- Uses real file system operations via StorageService
+- Proper test isolation with beforeEach/afterEach hooks
+
+**Acceptance Criteria**:
+1. ✅ storage-ipc.test.ts created with comprehensive tests (60 tests total)
+2. ✅ All storage IPC handlers tested (read, write, exists, delete, ensure-directory)
+3. ✅ Error handling and validation tested (invalid filenames, undefined data, circular references, etc.)
+4. ✅ Data serialization through IPC tested (objects, arrays, primitives, special characters, large datasets)
+5. ✅ All tests pass (60/60 tests)
+6. ✅ Typecheck passes (no errors)
+
+**Testing**:
+- ✅ TypeScript compilation successful
+- ✅ Build process successful (main, renderer, preload)
+- ✅ Story 13.0 IPC Handler tests: 60/60 passing
+- ✅ IPC Handler Registration: 5/5 tests passing
+- ✅ storage-read Handler: 6/6 tests passing
+- ✅ storage-write Handler: 6/6 tests passing
+- ✅ storage-exists Handler: 5/5 tests passing
+- ✅ storage-delete Handler: 5/5 tests passing
+- ✅ storage-ensure-directory Handler: 6/6 tests passing
+- ✅ Data Serialization Through IPC: 10/10 tests passing
+- ✅ Error Handling and Edge Cases: 6/6 tests passing
+- ✅ Operation Sequences and Integration: 6/6 tests passing
+- ✅ Return Value Format Consistency: 5/5 tests passing
+
+**Test Results**:
+- ✅ IPC Handler tests: 60/60 PASSED
+- ✅ TypeScript compilation: PASSED
+- ✅ Production build: PASSED
+
+**Test Coverage Summary**:
+- IPC Handler Registration: 5 tests
+- storage-read Handler: 6 tests
+- storage-write Handler: 6 tests
+- storage-exists Handler: 5 tests
+- storage-delete Handler: 5 tests
+- storage-ensure-directory Handler: 6 tests
+- Data Serialization Through IPC: 10 tests
+- Error Handling and Edge Cases: 6 tests
+- Operation Sequences and Integration: 6 tests
+- Return Value Format Consistency: 5 tests
+- Total: 60 tests
+
+**Testing Notes**:
+- Tests simulate the actual IPC handler logic from src/main/index.ts
+- All input validation scenarios tested (empty strings, non-strings, null, undefined, objects, arrays)
+- All data types tested through serialization (objects, arrays, strings, numbers, booleans, null)
+- Edge cases tested (circular references, large datasets, deep nesting, special characters)
+- Operation sequences tested to verify integration between handlers
+- Return value format consistency verified across all handlers
+- All existing tests continue to pass (no regressions)
+
+---
+
+## Stories Remaining: 5
+
+## Next Story: Story 14.0 - [To be defined]
