@@ -2,42 +2,83 @@ import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 import type { Song, Queue } from '../types'
 import { PlaybackState } from '../types'
+import { QueueStorageService } from '../services/queueStorage'
+import { usePreferenceStore } from './preferenceStore'
 
 interface QueueActions {
-  addSong: (song: Song) => void
-  removeSong: (index: number) => void
-  nextSong: () => void
-  clearQueue: () => void
-  reorderQueue: (fromIndex: number, toIndex: number) => void
-  setPlaybackState: (state: PlaybackState) => void
+  addSong: (song: Song) => Promise<void>
+  removeSong: (index: number) => Promise<void>
+  nextSong: () => Promise<void>
+  clearQueue: () => Promise<void>
+  reorderQueue: (fromIndex: number, toIndex: number) => Promise<void>
+  setPlaybackState: (state: PlaybackState) => Promise<void>
   playQueue: () => void
-  playNext: () => void
-  setCurrentSong: (song: Song | null) => void
-  shuffleQueue: () => void
-  moveInQueue: (fromIndex: number, toIndex: number) => void
+  playNext: () => Promise<void>
+  setCurrentSong: (song: Song | null) => Promise<void>
+  shuffleQueue: () => Promise<void>
+  moveInQueue: (fromIndex: number, toIndex: number) => Promise<void>
+  initialize: () => Promise<void>
 }
 
 interface QueueStore extends Queue, QueueActions {}
 
+const saveQueue = async (queue: Queue): Promise<void> => {
+  const persistEnabled = usePreferenceStore.getState().persistQueue
+  if (!persistEnabled) {
+    return
+  }
+
+  try {
+    const storageService = QueueStorageService.getInstance()
+    const success = await storageService.save(queue)
+    if (!success) {
+      console.error('Failed to save queue to file')
+    }
+  } catch (error) {
+    console.error('Error saving queue:', error)
+  }
+}
+
 export const useQueueStore = create<QueueStore>()(
   devtools(
     (set, get) => ({
-      // Initial state
       currentSong: null,
       upcomingSongs: [],
       playbackState: PlaybackState.IDLE,
 
-      // Actions
-      addSong: (song: Song) =>
+      initialize: async () => {
+        try {
+          const persistEnabled = usePreferenceStore.getState().persistQueue
+          if (!persistEnabled) {
+            return
+          }
+
+          const storageService = QueueStorageService.getInstance()
+          const queue = await storageService.load()
+          if (queue) {
+            set({
+              currentSong: queue.currentSong || null,
+              upcomingSongs: queue.upcomingSongs || [],
+              playbackState: queue.playbackState || PlaybackState.IDLE,
+            }, false, 'initialize')
+          }
+        } catch (error) {
+          console.error('Error initializing queue:', error)
+        }
+      },
+
+      addSong: async (song: Song) => {
         set(
           (state) => ({
             upcomingSongs: [...state.upcomingSongs, song],
           }),
           false,
           'addSong'
-        ),
+        )
+        await saveQueue(get())
+      },
 
-      removeSong: (index: number) =>
+      removeSong: async (index: number) => {
         set(
           (state) => {
             const newUpcomingSongs = [...state.upcomingSongs]
@@ -46,9 +87,11 @@ export const useQueueStore = create<QueueStore>()(
           },
           false,
           'removeSong'
-        ),
+        )
+        await saveQueue(get())
+      },
 
-      nextSong: () =>
+      nextSong: async () => {
         set(
           (state) => {
             if (state.upcomingSongs.length === 0) {
@@ -67,9 +110,11 @@ export const useQueueStore = create<QueueStore>()(
           },
           false,
           'nextSong'
-        ),
+        )
+        await saveQueue(get())
+      },
 
-      clearQueue: () =>
+      clearQueue: async () => {
         set(
           {
             currentSong: null,
@@ -78,9 +123,11 @@ export const useQueueStore = create<QueueStore>()(
           },
           false,
           'clearQueue'
-        ),
+        )
+        await saveQueue(get())
+      },
 
-      reorderQueue: (fromIndex: number, toIndex: number) =>
+      reorderQueue: async (fromIndex: number, toIndex: number) => {
         set(
           (state) => {
             const newUpcomingSongs = [...state.upcomingSongs]
@@ -90,14 +137,18 @@ export const useQueueStore = create<QueueStore>()(
           },
           false,
           'reorderQueue'
-        ),
+        )
+        await saveQueue(get())
+      },
 
-      setPlaybackState: (playbackState: PlaybackState) =>
+      setPlaybackState: async (playbackState: PlaybackState) => {
         set(
           { playbackState },
           false,
           'setPlaybackState'
-        ),
+        )
+        await saveQueue(get())
+      },
 
       playQueue: () => {
         const state = get()
@@ -106,14 +157,11 @@ export const useQueueStore = create<QueueStore>()(
         }
       },
 
-      // Additional methods expected by tests
-      playNext: () => {
-        // Alias for nextSong for backward compatibility
-        const state = get()
-        state.nextSong()
+      playNext: async () => {
+        await get().nextSong()
       },
 
-      setCurrentSong: (song: Song | null) =>
+      setCurrentSong: async (song: Song | null) => {
         set(
           {
             currentSong: song,
@@ -121,9 +169,11 @@ export const useQueueStore = create<QueueStore>()(
           },
           false,
           'setCurrentSong'
-        ),
+        )
+        await saveQueue(get())
+      },
 
-      shuffleQueue: () =>
+      shuffleQueue: async () => {
         set(
           (state) => {
             const shuffled = [...state.upcomingSongs]
@@ -135,12 +185,12 @@ export const useQueueStore = create<QueueStore>()(
           },
           false,
           'shuffleQueue'
-        ),
+        )
+        await saveQueue(get())
+      },
 
-      moveInQueue: (fromIndex: number, toIndex: number) => {
-        // Alias for reorderQueue for backward compatibility
-        const state = get()
-        state.reorderQueue(fromIndex, toIndex)
+      moveInQueue: async (fromIndex: number, toIndex: number) => {
+        await get().reorderQueue(fromIndex, toIndex)
       },
     }),
     {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import UpdateElectron from './components/update'
 import { useYouTubePlayer } from './hooks/useYouTubePlayer'
-import { useQueueStore } from './store'
+import { useQueueStore, usePreferenceStore } from './store'
 import { PlaybackState } from '../shared/types'
 import SearchPanel from './components/search/SearchPanel'
 import './App.css'
@@ -10,7 +10,7 @@ function App() {
   const [testVideoId, setTestVideoId] = useState('dQw4w9WgXcQ') // Rick Roll for testing
   const [seekTime, setSeekTime] = useState(0)
   const [volume, setVolume] = useState(50)
-  
+
   const {
     isDisplayWindowOpen,
     openDisplayWindow,
@@ -27,14 +27,21 @@ function App() {
     lastError,
   } = useYouTubePlayer()
 
-  const { 
-    currentSong, 
-    upcomingSongs, 
-    playbackState, 
-    addSong, 
-    nextSong, 
-    clearQueue 
+  const {
+    currentSong,
+    upcomingSongs,
+    playbackState,
+    addSong,
+    nextSong,
+    clearQueue,
+    initialize,
   } = useQueueStore()
+
+  const { persistQueue, setQueuePersistence } = usePreferenceStore()
+
+  useEffect(() => {
+    initialize()
+  }, [])
 
   // Listen for player state changes from display window
   useEffect(() => {
@@ -69,7 +76,7 @@ function App() {
     }
   }, [nextSong])
 
-  const handleTestSong = () => {
+  const handleTestSong = async () => {
     const testSong = {
       videoId: testVideoId,
       title: 'Test Video',
@@ -77,7 +84,7 @@ function App() {
       thumbnail: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/default.jpg',
       duration: 212, // 3:32
     }
-    addSong(testSong)
+    await addSong(testSong)
   }
 
   const handleVolumeChange = (newVolume: number) => {
@@ -226,7 +233,23 @@ function App() {
         {/* Queue Management */}
         <div className="card">
           <h2 className="text-xl font-semibold mb-4">Queue Management</h2>
-          
+
+          {/* Queue Persistence Toggle */}
+          <div className="mb-4">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={persistQueue}
+                onChange={(e) => setQueuePersistence(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium">Persist Queue</span>
+            </label>
+            <p className="text-xs text-gray-500 mt-1">
+              Save and restore queue state on app restart
+            </p>
+          </div>
+
           {/* Test Video Input */}
           <div className="mb-4">
             <label className="block text-sm font-medium mb-2">Test Video ID:</label>
@@ -264,9 +287,9 @@ function App() {
           <div className="mb-4">
             <div className="flex justify-between items-center mb-2">
               <h3 className="font-semibold text-sm">Queue ({upcomingSongs.length}):</h3>
-              <button 
+              <button
                 className="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-                onClick={clearQueue}
+                onClick={() => clearQueue()}
               >
                 Clear
               </button>
@@ -288,9 +311,9 @@ function App() {
             </div>
           </div>
 
-          <button 
+          <button
             className="w-full px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50"
-            onClick={nextSong}
+            onClick={() => nextSong()}
             disabled={upcomingSongs.length === 0}
           >
             Next Song
