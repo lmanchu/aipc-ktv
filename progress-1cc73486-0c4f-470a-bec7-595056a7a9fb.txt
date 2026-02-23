@@ -603,3 +603,166 @@ export const useQueueStore = create<QueueStore>()(
 ## Stories Remaining: 13
 
 ## Next Story: Story 5.0 - [To be defined]
+
+---
+
+## ✅ Story 6.0: Update electron-builder Configuration for Mac
+
+**Status**: COMPLETED
+**Date**: 2026-02-24 02:24:00 GMT+8
+**Commit**: a6a9476
+
+**Implemented**:
+1. ✅ Verified electron-builder.yml has correct macOS configuration
+2. ✅ Removed outdated electron-builder.json file to avoid confusion
+3. ✅ Configuration verified:
+   - appId: com.aipc.ktv
+   - productName: AIPC KTV
+   - macOS category: public.app-category.entertainment
+   - Icon: build/icons/icon.icns (verified valid Mac OS X icon)
+   - Target: .dmg and .zip with x64 and arm64 support
+   - ArtifactName: ${productName}_${version}_${arch}.${ext}
+   - Asar packaging enabled
+   - Output directory: release/${version}
+
+4. ✅ Comprehensive Test Suite (test/story-6-electron-builder-config.test.ts):
+   - App ID tests (1 test)
+   - Product Name tests (1 test)
+   - Artifact Name Format tests (2 tests)
+   - macOS Configuration tests (4 tests)
+   - macOS Target Configuration tests (7 tests)
+   - Icon File Existence tests (1 test)
+   - Asar Packaging tests (1 test)
+   - Output Directory tests (1 test)
+   - Files Configuration tests (3 tests)
+   - Total: 21 tests, all passing
+
+**Key Implementation Details**:
+- electron-builder.yml is the active configuration (takes precedence over .json)
+- Removed outdated electron-builder.json that had placeholder values
+- Configuration supports both Intel (x64) and Apple Silicon (arm64) Macs
+- Dual target format: .dmg for installer and .zip for redistribution
+- Icon file verified to be valid Mac OS X icon format (ic13 type, 466KB)
+- Consistent artifact naming across all platforms including architecture
+
+**Acceptance Criteria**:
+1. ✅ electron-builder.yml has correct macOS configuration
+2. ✅ appId set to com.aipc.ktv
+3. ✅ macOS category set correctly (public.app-category.entertainment)
+4. ✅ Icon path points to valid .icns file (build/icons/icon.icns)
+5. ✅ Target configured for .dmg with x64 and arm64
+6. ✅ ArtifactName format is consistent (${productName}_${version}_${arch}.${ext})
+7. ✅ Typecheck passes
+
+**Testing**:
+- ✅ TypeScript compilation successful
+- ✅ Build process successful (main, renderer, preload)
+- ✅ Story 6.0 electron-builder config tests: 21/21 passing
+- ✅ All configuration aspects tested: appId, productName, artifactName, macOS settings, targets, icon
+- ✅ Architecture support tested: x64 and arm64 for both dmg and zip
+- ✅ Icon file existence verified
+- ✅ Build configuration tested: asar, output directory, files
+
+**Test Results**:
+- ✅ electron-builder config tests: 21/21 PASSED
+- ✅ TypeScript compilation: PASSED
+- ✅ Production build: PASSED
+
+**Configuration Notes**:
+- electron-builder prioritizes YAML over JSON when both exist
+- Removed outdated .json file to prevent confusion and potential issues
+- YAML configuration is clean, well-structured, and production-ready
+- Supports universal binary distribution for Mac (x64 + arm64)
+- Ready for electron-updater integration (publish field set to null, will be configured in future story)
+
+---
+
+## Stories Remaining: 12
+
+## Next Story: Story 7.0 - [To be defined]
+
+---
+
+## ✅ Story 7.0: Update electron-builder Configuration for Windows
+
+**Status**: COMPLETED
+**Date**: 2026-02-24 02:38:00 GMT+8
+**Commit**: fe9bd73
+
+**Implemented**:
+1. ✅ Verified electron-builder.yml has correct Windows configuration
+2. ✅ Configuration verified:
+   - appId: com.aipc.ktv
+   - productName: AIPC KTV
+   - Icon: build/icons/icon.ico (verified valid Windows icon, 6 icons with different sizes)
+   - Target: nsis installer with x64 and ia32 architecture support
+   - ArtifactName: ${productName}_${version}_${arch}.${ext}
+   - Asar packaging enabled
+   - Output directory: release/${version}
+
+3. ✅ NSIS options configured correctly:
+   - oneClick: false (allows custom install path)
+   - perMachine: false (allows per-user install)
+   - allowToChangeInstallationDirectory: true
+   - deleteAppDataOnUninstall: false (preserves user data)
+   - createDesktopShortcut: true
+   - createStartMenuShortcut: true
+
+4. ✅ Comprehensive Test Suite (test/story-7-electron-builder-windows-config.test.ts):
+   - App ID tests (1 test)
+   - Product Name tests (1 test)
+   - Artifact Name Format tests (2 tests)
+   - Windows Configuration tests (2 tests)
+   - Windows Target Configuration tests (5 tests)
+   - NSIS Configuration tests (7 tests)
+   - Icon File Existence tests (2 tests)
+   - Asar Packaging tests (1 test)
+   - Output Directory tests (1 test)
+   - Files Configuration tests (3 tests)
+   - Total: 25 tests, all passing
+
+**Key Implementation Details**:
+- electron-builder.yml already had correct Windows configuration
+- Icon file verified to be valid Windows icon format (MS Windows icon resource, 6 icons)
+- Configuration supports both 64-bit (x64) and 32-bit (ia32) Windows
+- NSIS installer allows custom installation path and preserves user data on uninstall
+- Creates desktop and start menu shortcuts for easy access
+- Consistent artifact naming across all platforms including architecture
+
+**Acceptance Criteria**:
+1. ✅ electron-builder.yml has correct Windows configuration
+2. ✅ Icon path points to valid .ico file (build/icons/icon.ico)
+3. ✅ Target configured for .exe with NSIS installer
+4. ✅ NSIS options configured correctly (oneClick, perMachine, shortcuts, etc.)
+5. ✅ ArtifactName format is consistent (${productName}_${version}_${arch}.${ext})
+6. ✅ Typecheck passes (build successful)
+
+**Testing**:
+- ✅ TypeScript compilation successful
+- ✅ Build process successful (main, renderer, preload)
+- ✅ Story 7.0 electron-builder Windows config tests: 25/25 passing
+- ✅ All configuration aspects tested: appId, productName, artifactName, Windows settings, targets, NSIS options
+- ✅ Architecture support tested: x64 and ia32 for NSIS installer
+- ✅ Icon file existence and validity verified
+- ✅ Build configuration tested: asar, output directory, files
+- ✅ NSIS options tested: oneClick, perMachine, installation directory, shortcuts
+
+**Test Results**:
+- ✅ electron-builder Windows config tests: 25/25 PASSED
+- ✅ TypeScript compilation: PASSED
+- ✅ Production build: PASSED
+
+**Configuration Notes**:
+- Windows configuration was already correct in electron-builder.yml
+- NSIS installer provides a professional Windows installation experience
+- Custom installation path support allows flexibility for users
+- Preserving user data on uninstall prevents accidental data loss
+- Desktop and start menu shortcuts improve user discoverability
+- Dual architecture support ensures compatibility with both 64-bit and 32-bit Windows systems
+- Ready for electron-updater integration (publish field set to null, will be configured in future story)
+
+---
+
+## Stories Remaining: 11
+
+## Next Story: Story 8.0 - [To be defined]
