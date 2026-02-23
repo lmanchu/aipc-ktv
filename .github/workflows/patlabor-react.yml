@@ -1,0 +1,119 @@
+name: Patlabor CI Failure Reaction
+
+# Triggers when ANY workflow in this repo fails on a PR from a patlabor/* branch
+on:
+  workflow_run:
+    workflows: ["*"]
+    types: [completed]
+
+jobs:
+  react:
+    name: Re-queue failed Patlabor PR
+    runs-on: ubuntu-latest
+    # Only react to: failures on patlabor/* branches
+    if: |
+      github.event.workflow_run.conclusion == 'failure' &&
+      startsWith(github.event.workflow_run.head_branch, 'patlabor/')
+
+    steps:
+      - name: Extract context
+        id: ctx
+        run: |
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          ISSUE_ID=$(echo "$BRANCH" | grep -oiP 'lma-\d+' | tr '[:lower:]' '[:upper:]' || echo "")
+          PR_NUM="${{ github.event.workflow_run.pull_requests[0].number }}"
+          WORKFLOW_NAME="${{ github.event.workflow_run.name }}"
+          RUN_URL="${{ github.event.workflow_run.html_url }}"
+          echo "issue_id=$ISSUE_ID" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "pr_num=$PR_NUM" >> $GITHUB_OUTPUT
+          echo "workflow_name=$WORKFLOW_NAME" >> $GITHUB_OUTPUT
+          echo "run_url=$RUN_URL" >> $GITHUB_OUTPUT
+          echo "repo=${{ github.repository }}" >> $GITHUB_OUTPUT
+
+      - name: Skip if not a Linear-tracked issue
+        if: steps.ctx.outputs.issue_id == ''
+        run: |
+          echo "Branch ${{ steps.ctx.outputs.branch }} has no LMA-XX — skipping."
+          exit 0
+
+      - name: Notify Slack — CI failed
+        if: steps.ctx.outputs.issue_id != ''
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        run: |
+          ISSUE_ID="${{ steps.ctx.outputs.issue_id }}"
+          PR_NUM="${{ steps.ctx.outputs.pr_num }}"
+          WORKFLOW_NAME="${{ steps.ctx.outputs.workflow_name }}"
+          RUN_URL="${{ steps.ctx.outputs.run_url }}"
+          REPO="${{ steps.ctx.outputs.repo }}"
+          curl -s -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"channel\":\"C0A8UK6R3SM\",\"text\":\"⚠️ *Patlabor CI Failed — Auto-retrying*\n*Repo*: \`${REPO}\` | *Linear*: ${ISSUE_ID}\n*Workflow*: ${WORKFLOW_NAME} | *PR #${PR_NUM}*\n🔄 Re-labeling as \`patlabor-ready\` for auto-fix...\n${RUN_URL}\"}"
+
+      - name: Re-label Linear issue as patlabor-ready
+        if: steps.ctx.outputs.issue_id != ''
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          ISSUE_ID="${{ steps.ctx.outputs.issue_id }}"
+          WORKFLOW_NAME="${{ steps.ctx.outputs.workflow_name }}"
+          RUN_URL="${{ steps.ctx.outputs.run_url }}"
+          PR_NUM="${{ steps.ctx.outputs.pr_num }}"
+          REPO="${{ steps.ctx.outputs.repo }}"
+          BRANCH="${{ steps.ctx.outputs.branch }}"
+
+          # Get issue UUID + current labels
+          ISSUE_DATA=$(curl -s -X POST https://api.linear.app/graphql \
+            -H "Content-Type: application/json" \
+            -H "Authorization: $LINEAR_API_KEY" \
+            -d "{\"query\":\"query(\$id:String!){issue(id:\$id){id labels{nodes{id name}}}}\",\"variables\":{\"id\":\"$ISSUE_ID\"}}")
+
+          ISSUE_UUID=$(echo "$ISSUE_DATA" | python3 -c "
+          import sys,json
+          d=json.load(sys.stdin)
+          print(d['data']['issue']['id'])
+          " 2>/dev/null || echo "")
+
+          if [ -z "$ISSUE_UUID" ]; then
+            echo "Could not find Linear issue $ISSUE_ID, skipping"
+            exit 0
+          fi
+
+          # Get patlabor-ready label UUID
+          LABEL_DATA=$(curl -s -X POST https://api.linear.app/graphql \
+            -H "Content-Type: application/json" \
+            -H "Authorization: $LINEAR_API_KEY" \
+            -d '{"query":"query{issueLabels(filter:{name:{containsIgnoreCase:\"patlabor-ready\"}}){nodes{id name}}}"}')
+          LABEL_UUID=$(echo "$LABEL_DATA" | python3 -c "
+          import sys,json
+          d=json.load(sys.stdin)
+          print(d['data']['issueLabels']['nodes'][0]['id'])
+          " 2>/dev/null || echo "")
+
+          # Build new label list (keep existing, add patlabor-ready)
+          ALL_LABELS=$(echo "$ISSUE_DATA" | python3 -c "
+          import sys,json
+          d=json.load(sys.stdin)
+          ids=[l['id'] for l in d['data']['issue']['labels']['nodes'] if 'patlabor' not in l['name'].lower()]
+          if '$LABEL_UUID': ids.append('$LABEL_UUID')
+          print(json.dumps(ids))
+          " 2>/dev/null || echo "[\"$LABEL_UUID\"]")
+
+          # Update labels
+          curl -s -X POST https://api.linear.app/graphql \
+            -H "Content-Type: application/json" \
+            -H "Authorization: $LINEAR_API_KEY" \
+            -d "{\"query\":\"mutation(\$id:String!,\$labelIds:[String!]!){issueUpdate(id:\$id,input:{labelIds:\$labelIds}){success}}\",\"variables\":{\"id\":\"$ISSUE_UUID\",\"labelIds\":$ALL_LABELS}}"
+
+          # Add comment with failure context for Patlabor
+          PR_URL="https://github.com/${REPO}/pull/${PR_NUM}"
+          COMMENT="🔄 **CI Auto-Fix Triggered**\n\n❌ **Failed workflow**: ${WORKFLOW_NAME}\n🔗 **CI run**: ${RUN_URL}\n🔗 **PR**: ${PR_URL}\n\n**Patlabor instructions**: The CI workflow failed on branch \`${BRANCH}\`. Fix the failing checks and push to the existing branch — do NOT create a new branch or PR. Check the CI run URL above for specific error details."
+
+          curl -s -X POST https://api.linear.app/graphql \
+            -H "Content-Type: application/json" \
+            -H "Authorization: $LINEAR_API_KEY" \
+            -d "{\"query\":\"mutation(\$issueId:String!,\$body:String!){commentCreate(input:{issueId:\$issueId,body:\$body}){success}}\",\"variables\":{\"issueId\":\"$ISSUE_UUID\",\"body\":\"$COMMENT\"}}"
+
+          echo "✅ Linear issue $ISSUE_ID re-labeled patlabor-ready with CI failure context"
