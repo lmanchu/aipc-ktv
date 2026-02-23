@@ -1,0 +1,124 @@
+# AIPC KTV Development Progress - LMA-17
+
+## Run ID: 1cc73486-0c4f-470a-bec7-595056a7a9fb
+## Started: 2026-02-23 21:57:00 GMT+8
+
+---
+
+## Completed Stories
+
+### ✅ Story 1.0: Setup File-Based Storage Service in Main Process
+
+**Status**: COMPLETED
+**Date**: 2026-02-23 21:57:00 GMT+8
+**Commit**: 1ab92a1
+
+**Implemented**:
+1. ✅ StorageService class defined in `src/main/storage.ts`
+   - Methods: read(), write(), exists(), delete(), ensureDirectory()
+   - Uses app.getPath('userData') for data directory
+   - Async/await pattern for all file operations
+   - Proper error handling for ENOENT (file not found)
+   - JSON serialization/deserialization with validation
+   - Directory creation with recursive option
+   - Singleton pattern with getStorageService() and resetStorageService()
+
+2. ✅ Features:
+   - Read JSON files from userData directory
+   - Write JSON files to userData directory
+   - Check file existence
+   - Delete files gracefully (handles ENOENT)
+   - Create directories recursively if they don't exist
+   - Type-safe read with generic type parameter
+
+3. ✅ Comprehensive Test Suite (test/story-1-storage-service.test.ts):
+   - Constructor and Path Handling tests (3 tests)
+   - Path Resolution tests (1 test)
+   - Singleton Pattern tests (2 tests)
+   - Method Signatures tests (5 tests)
+   - Data Type Handling tests (8 tests)
+   - File Operations tests (5 tests)
+   - Directory Handling tests (2 tests)
+   - Error Handling tests (2 tests)
+   - Special Filenames tests (2 tests)
+   - Total: 30 tests, all passing
+
+**Key Implementation Details**:
+- Uses Node.js fs/promises module for async file operations
+- Path module for cross-platform path handling
+- Electron's app.getPath('userData') for platform-specific data directory
+- Graceful handling of ENOENT errors (returns null for read, no-op for delete)
+- JSON.stringify(data, null, 2) for pretty-printed JSON output
+
+**Acceptance Criteria**:
+1. ✅ StorageService class is defined in src/main/storage.ts
+2. ✅ Service can read/write JSON files to userData directory
+3. ✅ Service handles file not found errors gracefully (returns null)
+4. ✅ Service creates directories if they don't exist (recursive: true)
+5. ✅ All file operations use async/await
+6. ✅ Unit tests for StorageService pass (30/30 tests)
+7. ✅ Typecheck passes
+
+**Testing**:
+- ✅ TypeScript compilation successful
+- ✅ Build process successful (main, renderer, preload)
+- ✅ Story 1.0 Storage Service tests: 30/30 passing
+- ✅ All data types tested: objects, arrays, strings, numbers, booleans, null, empty objects/arrays
+- ✅ File operations tested: read, write, exists, delete, overwrite
+- ✅ Directory handling tested: nested directories, existing directories
+- ✅ Error handling tested: non-existent files, graceful deletion
+- ✅ Singleton pattern tested: same instance on multiple calls, new instance after reset
+
+**Test Results**:
+- ✅ StorageService tests: 30/30 PASSED
+- ✅ TypeScript compilation: PASSED
+- ✅ Production build: PASSED
+
+---
+
+## Codebase Patterns
+
+### File-Based Storage Pattern
+```typescript
+import { StorageService, getStorageService } from './storage'
+
+// Get singleton instance
+const storage = getStorageService()
+
+// Read data
+const data = await storage.read<MyType>('file.json')
+
+// Write data
+await storage.write('file.json', data)
+
+// Check existence
+const exists = await storage.exists('file.json')
+
+// Delete file
+await storage.delete('file.json')
+
+// Ensure directory exists
+await storage.ensureDirectory('subdir')
+```
+
+### Main Process Module Structure
+- Located in `src/main/`
+- Uses Electron APIs (app.getPath)
+- Uses Node.js modules (fs/promises, path)
+- Singleton pattern for service instances
+- Async/await for all I/O operations
+- Type-safe with generics
+
+### Test Pattern for Main Process Modules
+- Mock Electron APIs at top of file (vi.mock)
+- Use beforeEach to reset state and clear mocks
+- Integration-style tests with real file system operations
+- Mock userData path to avoid affecting user data
+- Test all data types and edge cases
+- Test error conditions and graceful handling
+
+---
+
+## Stories Remaining: 16
+
+## Next Story: Story 2.0 - Create IPC Handlers for Storage Operations
