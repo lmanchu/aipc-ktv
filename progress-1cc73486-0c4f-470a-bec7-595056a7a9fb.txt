@@ -1785,3 +1785,270 @@ describe('Documentation Verification', () => {
 ## Stories Remaining: 5
 
 ## Next Story: Story 14.0 - [To be defined]
+
+---
+
+## ✅ Story 14.0: Integration Test for Storage Migration
+
+**Status**: COMPLETED
+**Date**: 2026-02-24 04:55:00 GMT+8
+**Commit**: b2df52a
+
+**Implemented**:
+1. ✅ Created comprehensive test suite (test/story-14-storage-migration.test.ts) with 37 tests covering:
+    - Migration Detection (7 tests)
+      - Detect migration is needed when localStorage has data and file does not exist
+      - Not need migration when localStorage is empty
+      - Not need migration when file already exists
+      - Not need migration when both localStorage and file are empty
+      - Handle empty playlists array in localStorage
+      - Handle malformed JSON in localStorage gracefully
+      - Return correct localStorage key
+    - Data Transfer (5 tests)
+      - Migrate data from localStorage to file storage
+      - Migrate single playlist correctly
+      - Migrate large playlist collection (50 playlists)
+      - Migrate playlists with complex data structure (special chars, emoji, Unicode)
+      - Preserve data integrity during migration
+    - LocalStorage Cleanup (5 tests)
+      - Clear localStorage after successful migration
+      - Not clear localStorage when migration is not needed
+      - Not clear localStorage when file already exists
+      - Attempt to clear localStorage even if write fails
+      - Handle localStorage clear error gracefully
+    - Error Handling (6 tests)
+      - Handle localStorage read errors gracefully
+      - Handle file storage write errors during migration
+      - Handle file existence check errors
+      - Return error result when migration fails
+      - Handle storage service not available error
+      - Handle undefined data from localStorage
+    - Data Integrity Verification (9 tests)
+      - Verify all playlist properties are preserved (id, name, songs, createdAt)
+      - Verify song properties are preserved (videoId, title, channel, thumbnail, duration)
+      - Verify timestamp is preserved
+      - Verify correct number of playlists are migrated
+      - Verify correct number of songs are migrated (20 songs)
+      - Verify order of playlists is preserved
+      - Verify order of songs is preserved
+      - Handle empty playlists array
+      - Handle playlists with empty songs array
+    - Integration Scenarios (5 tests)
+      - Complete full migration workflow
+      - Skip migration when not needed
+      - Skip migration when file already exists
+      - Handle retry after failed migration
+      - Work with PlaylistStorageService after migration
+
+2. ✅ Comprehensive test coverage:
+    - Full migration flow tested end-to-end
+    - Migration detection tested (when migration is needed vs not needed)
+    - Data transfer from localStorage to file tested
+    - LocalStorage cleanup after migration tested
+    - Error handling during migration tested
+    - Data integrity verified after migration
+    - Edge cases tested (empty arrays, malformed JSON, complex data, special characters)
+    - Integration with PlaylistStorageService tested
+    - Retry scenarios tested
+
+3. ✅ Mock setup for testing:
+    - Mock localStorage with getItem, removeItem, setItem methods
+    - Mock Electron storage API with read, write, exists, delete methods
+    - Proper isolation with beforeEach/afterEach hooks
+    - Reset services for test independence
+
+**Key Implementation Details**:
+- Tests follow the integration test pattern established in previous stories
+- Uses vi.mock for mocking localStorage and Electron APIs
+- Tests verify the complete migration workflow from localStorage to file-based storage
+- All tests are isolated and independent
+- Comprehensive error handling tests ensure graceful degradation
+- Data integrity tests verify that all data is correctly preserved during migration
+
+**Acceptance Criteria**:
+1. ✅ storageMigration.test.ts created with comprehensive tests (37 tests total)
+2. ✅ Migration detection tested (7 tests covering all scenarios)
+3. ✅ Data transfer tested (5 tests covering various data sizes and complexities)
+4. ✅ LocalStorage cleanup tested (5 tests covering all cleanup scenarios)
+5. ✅ Error handling tested (6 tests covering various error scenarios)
+6. ✅ Data integrity verified (9 tests covering all properties and edge cases)
+7. ✅ All tests pass (37/37 tests)
+8. ✅ Typecheck passes (no errors)
+
+**Testing**:
+- ✅ TypeScript compilation successful
+- ✅ Build process successful (main, renderer, preload)
+- ✅ Story 14.0 Integration tests: 37/37 passing
+- ✅ Migration Detection: 7/7 tests passing
+- ✅ Data Transfer: 5/5 tests passing
+- ✅ LocalStorage Cleanup: 5/5 tests passing
+- ✅ Error Handling: 6/6 tests passing
+- ✅ Data Integrity Verification: 9/9 tests passing
+- ✅ Integration Scenarios: 5/5 tests passing
+
+**Test Results**:
+- ✅ Integration Test for Storage Migration: 37/37 PASSED
+- ✅ TypeScript compilation: PASSED
+- ✅ Production build: PASSED
+
+**Test Coverage Summary**:
+- Migration Detection: 7 tests
+- Data Transfer: 5 tests
+- LocalStorage Cleanup: 5 tests
+- Error Handling: 6 tests
+- Data Integrity Verification: 9 tests
+- Integration Scenarios: 5 tests
+
+**Testing Notes**:
+- Tests use vi.mock to mock localStorage and Electron APIs
+- All tests are isolated with beforeEach/afterEach hooks
+- Error scenarios test graceful degradation
+- Data integrity tests verify all properties and ordering
+- Integration tests verify complete workflows
+- Retry scenarios test error recovery
+- All existing tests continue to pass (no regressions)
+
+---
+
+## Stories Remaining: 3
+
+## Next Story: Story 15.0 - [To be defined]
+
+
+---
+
+## ✅ Story 15.0: End-to-End Integration Test
+
+**Status**: COMPLETED
+**Date**: 2026-02-24 05:31:00 GMT+8
+**Commit**: 6797d13
+
+**Implemented**:
+1. ✅ Created comprehensive end-to-end integration test suite (test/story-15-e2e-integration.test.ts) with 44 tests covering:
+    - App Initialization (8 tests)
+      - Initialize playlist store from empty file storage
+      - Initialize playlist store with existing playlists
+      - Initialize queue store with empty state when persistence is disabled
+      - Initialize queue store from file when persistence is enabled
+      - Handle initialization errors gracefully for playlists
+      - Handle initialization errors gracefully for queue
+      - Handle null data during playlist initialization
+      - Handle null data during queue initialization
+    - Playlist Save/Restore (9 tests)
+      - Save playlist to file storage and restore correctly
+      - Restore multiple playlists correctly
+      - Save songs to playlist and restore correctly
+      - Delete playlist and save to file
+      - Handle save errors gracefully
+      - Preserve all playlist properties during save and restore
+      - Maintain playlist order after save and restore
+      - Restore playlists with empty songs array
+    - Migration Flow (10 tests)
+      - Detect migration is needed when localStorage has data and file does not exist
+      - Migrate data from localStorage to file storage
+      - Skip migration when localStorage is empty
+      - Skip migration when file already exists
+      - Clear localStorage after successful migration
+      - Handle malformed JSON in localStorage gracefully
+      - Handle empty playlists array in localStorage
+      - Preserve all song properties during migration
+      - Handle write errors during migration
+      - Work with PlaylistStorageService after migration
+    - Queue Persistence (13 tests)
+      - Save queue to file when persistence is enabled
+      - Not save queue when persistence is disabled
+      - Load queue from file when persistence is enabled
+      - Not load queue when persistence is disabled
+      - Preserve current song state
+      - Preserve upcoming songs order
+      - Preserve playback state
+      - Handle save errors gracefully
+      - Handle load errors gracefully
+      - Handle null queue data on load
+      - Save queue on clear operation when persistence is enabled
+      - Save queue on next song operation when persistence is enabled
+      - Toggle persistence and save accordingly
+    - Complete Workflow Integration (5 tests)
+      - Handle complete app startup: migrate and initialize stores
+      - Create playlists, save to file, and restore on re-initialization
+      - Handle queue persistence through full lifecycle
+      - Handle migration and subsequent playlist operations
+      - Handle initialization with no existing data
+
+2. ✅ Comprehensive test coverage:
+    - Complete app initialization flow tested
+    - Playlist save/restore tested with various scenarios
+    - Migration flow tested end-to-end
+    - Queue persistence tested with preference integration
+    - Complete workflow integration tested
+    - Error handling tested throughout
+    - Data integrity verified in all scenarios
+
+3. ✅ Mock setup for testing:
+    - Mock localStorage with getItem, removeItem, setItem methods
+    - Mock Electron storage API with read, write, exists, delete methods
+    - Proper isolation with beforeEach/afterEach hooks
+    - Reset services for test independence
+    - Use vi.spyOn to mock service methods directly
+
+**Key Implementation Details**:
+- Tests follow the E2E integration pattern established in previous stories
+- Uses vi.spyOn for mocking service methods to work with singleton exports
+- Tests verify the complete application startup workflow
+- All tests are isolated and independent
+- Comprehensive error handling tests ensure graceful degradation
+- Data integrity tests verify that all data is correctly preserved throughout the lifecycle
+
+**Acceptance Criteria**:
+1. ✅ E2E test file created with comprehensive scenarios (44 tests)
+2. ✅ App initialization tested (8 tests covering playlists and queues)
+3. ✅ Playlist save/restore tested (9 tests covering all operations)
+4. ✅ Migration flow tested (10 tests covering all migration scenarios)
+5. ✅ Queue persistence tested (13 tests covering all queue operations)
+6. ✅ Tests run in development environment (all tests pass)
+7. ✅ All tests pass (44/44 tests)
+8. ✅ Typecheck passes (no errors)
+
+**Testing**:
+- ✅ TypeScript compilation successful
+- ✅ Build process successful (main, renderer, preload)
+- ✅ Story 15.0 E2E Integration tests: 44/44 passing
+- ✅ All app initialization scenarios tested: empty state, existing data, error handling
+- ✅ All playlist operations tested: create, delete, add song, remove song, update
+- ✅ All migration scenarios tested: needed, not needed, errors, data integrity
+- ✅ All queue persistence scenarios tested: enabled, disabled, save, load, error handling
+- ✅ Complete workflow integration tested: startup, migration, operations, restore
+
+**Test Results**:
+- ✅ E2E Integration tests: 44/44 PASSED
+- ✅ TypeScript compilation: PASSED
+- ✅ Production build: PASSED
+
+**Test Coverage Summary**:
+- App Initialization: 8 tests
+- Playlist Save/Restore: 9 tests
+- Migration Flow: 10 tests
+- Queue Persistence: 13 tests
+- Complete Workflow Integration: 5 tests
+- Total: 44 tests
+
+**Testing Notes**:
+- Tests use vi.spyOn to mock service methods directly
+- This works around the singleton export pattern where the store imports a pre-initialized instance
+- All tests are isolated with beforeEach/afterEach hooks
+- Error scenarios test graceful degradation
+- Data integrity tests verify all properties and ordering
+- Integration tests verify complete workflows
+- The E2E tests verify the complete application lifecycle from initialization through data operations
+
+**Next Steps**:
+- All storage system stories completed
+- Ready for the next set of stories (remaining 3 stories)
+- Comprehensive E2E test coverage ensures confidence in the storage system
+
+---
+
+## Stories Remaining: 2
+
+## Next Story: Story 16.0 - [To be defined]
+
