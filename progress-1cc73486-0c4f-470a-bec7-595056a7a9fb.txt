@@ -116,9 +116,155 @@ await storage.ensureDirectory('subdir')
 - Mock userData path to avoid affecting user data
 - Test all data types and edge cases
 - Test error conditions and graceful handling
+### IPC Handler Pattern
+```typescript
+// Main Process (src/main/index.ts)
+import { ipcMain } from 'electron'
+import { getStorageService } from './storage'
+
+const storage = getStorageService()
+
+ipcMain.handle('storage-read', async (_, filename: string) => {
+  try {
+    // Validate input
+    if (!filename || typeof filename !== 'string') {
+      return { success: false, error: 'Invalid filename' }
+    }
+    // Perform operation
+    const data = await storage.read(filename)
+    return { success: true, data }
+  } catch (error) {
+    // Handle errors
+    const message = error instanceof Error ? error.message : String(error)
+    return { success: false, error: message }
+  }
+})
+```
+
+```typescript
+// Preload (src/main/preload.ts)
+import { ipcRenderer, contextBridge } from 'electron'
+
+contextBridge.exposeInMainWorld('electron', {
+  storage: {
+    read: <T>(filename: string) => 
+      ipcRenderer.invoke('storage-read', filename) as 
+      Promise<{ success: boolean; data?: T | null; error?: string }>,
+    write: <T>(filename: string, data: T) => 
+      ipcRenderer.invoke('storage-write', filename, data) as 
+      Promise<{ success: boolean; error?: string }>,
+    // ... other methods
+  }
+})
+```
+
+```typescript
+// Type Definitions (src/shared/types.ts)
+export interface StorageIPC {
+  read: <T>(filename: string) => Promise<{ success: boolean; data?: T | null; error?: string }>;
+  write: <T>(filename: string, data: T) => Promise<{ success: boolean; error?: string }>;
+  // ... other methods
+}
+
+export interface ElectronAPI {
+  storage: StorageIPC;
+  // ... other APIs
+}
+```
+
+```typescript
+// Renderer Process Usage
+const result = await window.electron.storage.read<MyType>('file.json')
+if (result.success) {
+  const data = result.data
+  // Use data
+} else {
+  console.error(result.error)
+}
+```
+
+**Key Principles**:
+- Consistent return format: `{ success: boolean, data?: any, error?: string }`
+- Validate all inputs before processing
+- Catch and convert errors to error messages
+- Use generic types for type-safe operations
+- Expose via contextBridge with proper typing
 
 ---
 
 ## Stories Remaining: 16
 
 ## Next Story: Story 2.0 - Create IPC Handlers for Storage Operations
+
+### ✅ Story 2.0: Create IPC Handlers for Storage Operations
+
+**Status**: COMPLETED
+**Date**: 2026-02-23 21:57:00 GMT+8
+**Commit**: ccb383f
+
+**Implemented**:
+1. ✅ IPC handlers added in `src/main/index.ts` for all storage operations
+   - storage-read: Read JSON file from userData directory
+   - storage-write: Write JSON file to userData directory
+   - storage-exists: Check if file exists
+   - storage-delete: Delete file from userData directory
+   - storage-ensure-directory: Create directory recursively
+   - All handlers include proper error handling and validation
+   - Consistent return format: { success: boolean, data?: any, error?: string }
+
+2. ✅ Storage API exposed via contextBridge in preload
+   - `src/main/preload.ts`: TypeScript-typed storage API
+   - `electron/preload/index.ts`: Production preload script
+   - Generic type support for read/write operations
+   - All storage methods available on `window.electron.storage`
+
+3. ✅ TypeScript types defined for storage operations
+   - `src/shared/types.ts`: StorageIPC interface
+   - `src/renderer/types/global.d.ts`: ElectronStorageAPI interface
+   - Full type safety for storage operations in renderer process
+   - Consistent with existing IPC patterns
+
+4. ✅ Comprehensive Test Suite (test/story-2-ipc-handlers.test.ts):
+   - IPC Handler Implementation tests (5 tests)
+   - Error Handling tests (2 tests)
+   - Data Type Handling tests (6 tests)
+   - Operation Sequences tests (3 tests)
+   - Total: 16 tests, all passing
+
+**Key Implementation Details**:
+- Uses Electron's ipcMain.handle() for async request/response pattern
+- Validates all input parameters (filename, data, directory)
+- Proper error catching and conversion to error messages
+- Type-safe return values for renderer process
+- Follows existing IPC patterns in the codebase
+
+**Acceptance Criteria**:
+1. ✅ IPC handlers added in src/main/index.ts for all storage operations
+2. ✅ Storage API exposed via contextBridge in preload
+3. ✅ TypeScript types defined for storage operations
+4. ✅ Renderer can invoke storage operations via window.electron.storage
+5. ✅ All handlers include proper error handling and validation
+6. ✅ Unit tests for IPC handlers pass (16/16 tests)
+7. ✅ Typecheck passes
+
+**Testing**:
+- ✅ TypeScript compilation successful
+- ✅ Build process successful (main, renderer, preload)
+- ✅ Story 2.0 IPC Handlers tests: 16/16 passing
+- ✅ All storage operations tested: read, write, exists, delete, ensureDirectory
+- ✅ Input validation tested: invalid filenames, undefined data, invalid directories
+- ✅ Error handling tested: non-existent files, graceful error handling
+- ✅ Data type handling tested: objects, arrays, strings, numbers, booleans, null
+- ✅ Operation sequences tested: write-read, write-read-delete, multiple operations
+
+**Test Results**:
+- ✅ IPC Handler tests: 16/16 PASSED
+- ✅ TypeScript compilation: PASSED
+- ✅ Production build: PASSED
+
+
+---
+
+## Stories Remaining: 15
+
+## Next Story: Story 3.0 - [To be defined]
