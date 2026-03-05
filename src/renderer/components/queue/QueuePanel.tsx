@@ -1,3 +1,4 @@
+import React from 'react'
 import { useQueueStore } from '../../store'
 import { Song } from '../../types'
 import {
@@ -17,7 +18,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 
 // Drag handle icon component
-const DragHandle = (props) => (
+const DragHandle = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     width="20"
@@ -67,7 +68,7 @@ function SortableSongItem({ song, index, onRemove }: SortableSongItemProps) {
         <DragHandle />
       </div>
       <img
-        src={song.thumbnail.url}
+        src={song.thumbnail}
         alt={song.title}
         className="w-16 h-9 object-cover rounded"
       />
@@ -76,7 +77,7 @@ function SortableSongItem({ song, index, onRemove }: SortableSongItemProps) {
           {song.title}
         </h4>
         <p className="text-xs text-gray-600 truncate">
-          {song.channelTitle}
+          {song.channel}
         </p>
       </div>
       <button
@@ -122,7 +123,7 @@ export default function QueuePanel({ className = '' }: QueuePanelProps) {
         {currentSong ? (
           <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <img
-              src={currentSong.thumbnail.url}
+              src={currentSong.thumbnail}
               alt={currentSong.title}
               className="w-24 h-14 object-cover rounded"
             />
@@ -131,7 +132,7 @@ export default function QueuePanel({ className = '' }: QueuePanelProps) {
                 {currentSong.title}
               </h4>
               <p className="text-sm text-gray-600 truncate">
-                {currentSong.channelTitle}
+                {currentSong.channel}
               </p>
             </div>
           </div>

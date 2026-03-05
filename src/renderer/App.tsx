@@ -5,6 +5,7 @@ import { useQueueStore } from './store'
 import { PlaybackState } from '../shared/types'
 import SearchPanel from './components/search/SearchPanel'
 import QueuePanel from './components/queue/QueuePanel'
+import PlaylistPanel from './components/playlist/PlaylistPanel'
 import './App.css'
 
 function App() {
@@ -216,6 +217,10 @@ function App() {
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="card">
+          <PlaylistPanel />
         </div>
 
         <div className="card">

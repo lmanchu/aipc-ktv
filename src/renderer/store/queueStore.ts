@@ -30,9 +30,18 @@ export const useQueueStore = create<QueueStore>()(
       // Actions
       addSong: (song: Song) =>
         set(
-          (state) => ({
-            upcomingSongs: [...state.upcomingSongs, song],
-          }),
+          (state) => {
+            // Auto-play: if nothing is playing, set as current song
+            if (!state.currentSong) {
+              return {
+                currentSong: song,
+                playbackState: PlaybackState.LOADING,
+              }
+            }
+            return {
+              upcomingSongs: [...state.upcomingSongs, song],
+            }
+          },
           false,
           'addSong'
         ),
