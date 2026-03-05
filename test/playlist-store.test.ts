@@ -2,25 +2,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { usePlaylistStore } from '../src/renderer/store/playlistStore';
 import { Song } from '../src/renderer/types';
 
-// Mock localStorage
-const localStorageMock = {
-  getItem: vi.fn(() => null),
-  setItem: vi.fn(() => {}),
-  removeItem: vi.fn(() => {}),
-  clear: vi.fn(() => {}),
-  length: 0,
-  key: vi.fn(() => null),
-};
-Object.defineProperty(globalThis, 'localStorage', {
-  value: localStorageMock,
-  writable: true,
-});
-
 describe('PlaylistStore', () => {
   // Reset store state before each test
   beforeEach(() => {
     vi.clearAllMocks();
-    localStorageMock.getItem.mockReturnValue(null);
+    // Clear localStorage
+    localStorage.clear();
+    // Reset store state
     usePlaylistStore.setState({ playlists: [] });
   });
 

@@ -1,6 +1,49 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
+// Mock localStorage before any tests run - needed for Zustand persist middleware
+const localStorageMock = (() => {
+  let store: Record<string, string> = {}
+  
+  return {
+    getItem: (key: string) => store[key] || null,
+    setItem: (key: string, value: string) => {
+      store[key] = value.toString()
+    },
+    removeItem: (key: string) => {
+      delete store[key]
+    },
+    clear: () => {
+      store = {}
+    },
+    get length() {
+      return Object.keys(store).length
+    },
+    key: (index: number) => Object.keys(store)[index] || null,
+  }
+})()
+
+Object.defineProperty(global, 'localStorage', {
+  value: localStorageMock,
+  writable: true,
+})
+
+// Mock document.body.style to prevent React DOM vendor-prefixed event errors
+if (!document.body.style) {
+  Object.defineProperty(document.body, 'style', {
+    value: {},
+    writable: true,
+  })
+}
+
+// Mock document.documentElement to prevent React DOM errors
+Object.defineProperty(document, 'documentElement', {
+  value: {
+    style: {},
+  },
+  writable: true,
+})
+
 // Mock window.ipcRenderer for all tests
 Object.defineProperty(window, 'ipcRenderer', {
   value: {
@@ -74,12 +117,46 @@ Object.defineProperty(window, 'getComputedStyle', {
 })
 
 // Mock document.documentElement.style for React's feature detection
-if (document.documentElement) {
-  Object.defineProperty(document.documentElement, 'style', {
-    value: {},
-    writable: true,
-  })
-}
+Object.defineProperty(document, 'documentElement', {
+  value: {
+    style: {
+      WebkitAnimation: undefined,
+      webkitAnimation: undefined,
+      MozAnimation: undefined,
+      msAnimation: undefined,
+      OAnimation: undefined,
+      animation: undefined,
+    },
+    getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }),
+  },
+  writable: true,
+})
+
+// Ensure document.body.style exists with all vendor prefixes
+Object.defineProperty(document.body, 'style', {
+  value: {
+    WebkitAnimation: undefined,
+    webkitAnimation: undefined,
+    MozAnimation: undefined,
+    msAnimation: undefined,
+    OAnimation: undefined,
+    animation: undefined,
+  },
+  writable: true,
+})
+
+// Mock all elements to have style
+Object.defineProperty(HTMLElement.prototype, 'style', {
+  value: {
+    WebkitAnimation: undefined,
+    webkitAnimation: undefined,
+    MozAnimation: undefined,
+    msAnimation: undefined,
+    OAnimation: undefined,
+    animation: undefined,
+  },
+  writable: true,
+})
 
 // Mock console.log to reduce test output noise
 vi.spyOn(console, 'log').mockImplementation(() => {})

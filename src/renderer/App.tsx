@@ -4,6 +4,7 @@ import { useYouTubePlayer } from './hooks/useYouTubePlayer'
 import { useQueueStore } from './store'
 import { PlaybackState } from '../shared/types'
 import SearchPanel from './components/search/SearchPanel'
+import QueuePanel from './components/queue/QueuePanel'
 import './App.css'
 
 function App() {
@@ -92,214 +93,131 @@ function App() {
         <p className="text-lg text-gray-600 mt-2">Karaoke Control Center</p>
       </header>
       
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Search Panel - Full width on mobile, 1/3 on large screens */}
-        <div className="card lg:col-span-4">
-          <SearchPanel />
-        </div>
-        
-        {/* Display Window Management */}
-        <div className="card">
-          <h2 className="text-xl font-semibold mb-4">Display Window</h2>
-          <div className="status-indicator mb-4">
-            <span className={`inline-block w-3 h-3 rounded-full mr-2 ${
-              isDisplayWindowOpen ? 'bg-green-500' : 'bg-red-500'
-            }`}></span>
-            <span>Status: {isDisplayWindowOpen ? 'Connected' : 'Disconnected'}</span>
+      <main className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="card">
+            <SearchPanel />
           </div>
-          <div className="space-y-2">
-            <button 
-              className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-              onClick={openDisplayWindow}
-              disabled={isDisplayWindowOpen}
-            >
-              Open Display Window
-            </button>
-            <button 
-              className="w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-              onClick={closeDisplayWindow}
-              disabled={!isDisplayWindowOpen}
-            >
-              Close Display Window
-            </button>
+          <div className="card">
+            <QueuePanel />
           </div>
         </div>
-        
-        {/* Player Controls */}
-        <div className="card">
-          <h2 className="text-xl font-semibold mb-4">Player Controls</h2>
-          <div className="mb-4">
-            <div className={`px-3 py-1 rounded-full text-sm font-medium inline-block ${
-              playbackState === PlaybackState.PLAYING ? 'bg-green-100 text-green-800' :
-              playbackState === PlaybackState.PAUSED ? 'bg-yellow-100 text-yellow-800' :
-              playbackState === PlaybackState.LOADING ? 'bg-blue-100 text-blue-800' :
-              playbackState === PlaybackState.ERROR ? 'bg-red-100 text-red-800' :
-              'bg-gray-100 text-gray-800'
-            }`}>
-              {playbackState.toUpperCase()}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="card">
+            <h2 className="text-xl font-semibold mb-4">Display Window</h2>
+            <div className="status-indicator mb-4">
+              <span className={`inline-block w-3 h-3 rounded-full mr-2 ${
+                isDisplayWindowOpen ? 'bg-green-500' : 'bg-red-500'
+              }`}></span>
+              <span>Status: {isDisplayWindowOpen ? 'Connected' : 'Disconnected'}</span>
             </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            <button 
-              className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              onClick={() => playVideo()}
-              disabled={!isDisplayWindowOpen}
-            >
-              ▶️ Play
-            </button>
-            <button 
-              className="px-3 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
-              onClick={pauseVideo}
-              disabled={!isDisplayWindowOpen}
-            >
-              ⏸️ Pause
-            </button>
-            <button 
-              className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-              onClick={stopVideo}
-              disabled={!isDisplayWindowOpen}
-            >
-              ⏹️ Stop
-            </button>
+            <div className="space-y-2">
+              <button 
+                className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                onClick={openDisplayWindow}
+                disabled={isDisplayWindowOpen}
+              >
+                Open Display Window
+              </button>
+              <button 
+                className="w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                onClick={closeDisplayWindow}
+                disabled={!isDisplayWindowOpen}
+              >
+                Close Display Window
+              </button>
+            </div>
           </div>
           
-          {/* Seek Controls */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">Seek to (seconds):</label>
-            <div className="flex gap-2">
-              <input
-                type="number"
-                value={seekTime}
-                onChange={(e) => setSeekTime(Number(e.target.value))}
-                className="flex-1 px-3 py-2 border rounded"
-                min="0"
-              />
-              <button 
-                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-                onClick={() => seekTo(seekTime)}
-                disabled={!isDisplayWindowOpen}
-              >
-                Seek
-              </button>
-            </div>
-          </div>
-
-          {/* Volume Controls */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">Volume: {volume}%</label>
-            <div className="flex gap-2 items-center">
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={volume}
-                onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                className="flex-1"
-                disabled={!isDisplayWindowOpen}
-              />
-              <button 
-                className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
-                onClick={mute}
-                disabled={!isDisplayWindowOpen}
-              >
-                🔇
-              </button>
-              <button 
-                className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
-                onClick={unmute}
-                disabled={!isDisplayWindowOpen}
-              >
-                🔊
-              </button>
-            </div>
-          </div>
-
-          <button 
-            className="w-full px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
-            onClick={getPlayerState}
-            disabled={!isDisplayWindowOpen}
-          >
-            Get Player State
-          </button>
-        </div>
-        
-        {/* Queue Management */}
-        <div className="card">
-          <h2 className="text-xl font-semibold mb-4">Queue Management</h2>
-          
-          {/* Test Video Input */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">Test Video ID:</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={testVideoId}
-                onChange={(e) => setTestVideoId(e.target.value)}
-                placeholder="YouTube Video ID"
-                className="flex-1 px-3 py-2 border rounded"
-              />
-              <button 
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                onClick={handleTestSong}
-              >
-                Add
-              </button>
-            </div>
-          </div>
-
-          {/* Current Song */}
-          <div className="mb-4">
-            <h3 className="font-semibold text-sm mb-2">Now Playing:</h3>
-            {currentSong ? (
-              <div className="p-3 bg-gray-50 rounded">
-                <p className="font-medium">{currentSong.title}</p>
-                <p className="text-sm text-gray-600">{currentSong.channel}</p>
+          <div className="card">
+            <h2 className="text-xl font-semibold mb-4">Player Controls</h2>
+            <div className="mb-4">
+              <div className={`px-3 py-1 rounded-full text-sm font-medium inline-block ${
+                playbackState === PlaybackState.PLAYING ? 'bg-green-100 text-green-800' :
+                playbackState === PlaybackState.PAUSED ? 'bg-yellow-100 text-yellow-800' :
+                playbackState === PlaybackState.LOADING ? 'bg-blue-100 text-blue-800' :
+                playbackState === PlaybackState.ERROR ? 'bg-red-100 text-red-800' :
+                'bg-gray-100 text-gray-800'
+              }`}>
+                {playbackState.toUpperCase()}
               </div>
-            ) : (
-              <p className="text-gray-500 text-sm">No song playing</p>
-            )}
-          </div>
-
-          {/* Queue */}
-          <div className="mb-4">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="font-semibold text-sm">Queue ({upcomingSongs.length}):</h3>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-4">
               <button 
-                className="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-                onClick={clearQueue}
+                className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                onClick={() => playVideo()}
+                disabled={!isDisplayWindowOpen}
               >
-                Clear
+                ▶️ Play
+              </button>
+              <button 
+                className="px-3 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
+                onClick={pauseVideo}
+                disabled={!isDisplayWindowOpen}
+              >
+                ⏸️ Pause
+              </button>
+              <button 
+                className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                onClick={stopVideo}
+                disabled={!isDisplayWindowOpen}
+              >
+                ⏹️ Stop
               </button>
             </div>
-            <div className="max-h-40 overflow-y-auto">
-              {upcomingSongs.length > 0 ? (
-                upcomingSongs.slice(0, 5).map((song, index) => (
-                  <div key={index} className="p-2 bg-gray-50 rounded mb-2 text-sm">
-                    <p className="font-medium truncate">{song.title}</p>
-                    <p className="text-gray-600 truncate">{song.channel}</p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-500 text-sm">Queue is empty</p>
-              )}
-              {upcomingSongs.length > 5 && (
-                <p className="text-gray-500 text-xs">+{upcomingSongs.length - 5} more songs</p>
-              )}
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2">Seek to (seconds):</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={seekTime}
+                  onChange={(e) => setSeekTime(Number(e.target.value))}
+                  className="flex-1 px-3 py-2 border rounded"
+                  min="0"
+                />
+                <button 
+                  className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                  onClick={() => seekTo(seekTime)}
+                  disabled={!isDisplayWindowOpen}
+                >
+                  Seek
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2">Volume: {volume}%</label>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={volume}
+                  onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                  className="flex-1"
+                  disabled={!isDisplayWindowOpen}
+                />
+                <button 
+                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
+                  onClick={mute}
+                  disabled={!isDisplayWindowOpen}
+                >
+                  🔇
+                </button>
+                <button 
+                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
+                  onClick={unmute}
+                  disabled={!isDisplayWindowOpen}
+                >
+                  🔊
+                </button>
+              </div>
             </div>
           </div>
-
-          <button 
-            className="w-full px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50"
-            onClick={nextSong}
-            disabled={upcomingSongs.length === 0}
-          >
-            Next Song
-          </button>
         </div>
-      </div>
 
-      {/* Player State Display */}
-      <div className="mt-6">
         <div className="card">
           <h2 className="text-xl font-semibold mb-4">Player State Debug</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -317,9 +235,9 @@ function App() {
             </div>
           </div>
         </div>
-      </div>
 
-      <UpdateElectron />
+        <UpdateElectron />
+      </main>
     </div>
   )
 }

@@ -32,6 +32,13 @@ const mockIpcMain = {
   on: vi.fn()
 }
 
+vi.mock('electron-updater', () => ({
+  autoUpdater: {
+    on: vi.fn(),
+    checkForUpdatesAndNotify: vi.fn(),
+  },
+}));
+
 vi.mock('electron', () => ({
   app: {
     whenReady: vi.fn(() => Promise.resolve()),
@@ -67,13 +74,6 @@ vi.mock('node:url', () => ({
   fileURLToPath: vi.fn(() => '/test/index.js')
 }))
 
-vi.mock('node:module', () => ({
-  default: {
-    createRequire: vi.fn(() => vi.fn())
-  },
-  createRequire: vi.fn(() => vi.fn())
-}))
-
 // Mock the electron/main/update module
 vi.mock('/Users/lman/tachikoma/haro/aipc-ktv/electron/main/update.ts', () => ({
   update: vi.fn()
@@ -92,7 +92,7 @@ describe('Story 4.0: Dual-Screen Window Architecture', () => {
   describe('AC1: Main process creates two windows with correct dimensions', () => {
     it('should create control window with 800x600 dimensions', async () => {
       // Import main after mocks are set up
-      await import('/Users/lman/tachikoma/haro/aipc-ktv/electron/main/index.ts')
+      await import('../electron/main/index.ts')
       
       // Control window should be created on app ready
       expect(mockBrowserWindow).toHaveBeenCalledWith(
@@ -176,7 +176,7 @@ describe('Story 4.0: Dual-Screen Window Architecture', () => {
       
       // Re-import to test production behavior
       vi.resetModules()
-      require('/Users/lman/tachikoma/haro/aipc-ktv/electron/main/index.ts')
+      require('../electron/main/index.ts')
       
       expect(mockWindow.loadFile).toHaveBeenCalledWith(
         expect.stringContaining('index.html')
@@ -197,7 +197,7 @@ describe('Story 4.0: Dual-Screen Window Architecture', () => {
     it('should load display interface from display.html in production', async () => {
       delete process.env.VITE_DEV_SERVER_URL
       vi.resetModules()
-      require('/Users/lman/tachikoma/haro/aipc-ktv/electron/main/index.ts')
+      require('../electron/main/index.ts')
       
       const openDisplayHandler = mockIpcMain.handle.mock.calls
         .find(([event]) => event === 'open-display-window')?.[1]
@@ -303,7 +303,7 @@ describe('Story 4.0: Dual-Screen Window Architecture', () => {
   describe('AC6: Both windows close properly when app exits', () => {
     it('should register window cleanup on before-quit event', () => {
       // Import main process
-      require('/Users/lman/tachikoma/haro/aipc-ktv/electron/main/index.ts')
+      require('../electron/main/index.ts')
       
       // Check that app.on('before-quit') was registered
       const { app } = require('electron')

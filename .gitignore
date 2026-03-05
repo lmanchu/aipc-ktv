@@ -14,6 +14,13 @@ dist-electron
 release
 *.local
 
+# Environment files
+.env
+.env.*
+.env.local
+*.key
+*.pem
+
 # Editor directories and files
 .vscode/.debug.env
 .idea
