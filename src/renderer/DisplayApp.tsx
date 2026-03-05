@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { useQueueStore } from './store'
 import { PlaybackState } from '../shared/types'
+import SubtitleOverlay, { SubtitleCue, parseSRT, parseLRC } from './components/subtitle/SubtitleOverlay'
+import { YouTubeClient } from './lib/youtube'
 
 interface YTPlayer {
   playVideo: () => void
@@ -29,6 +31,9 @@ const DisplayApp: React.FC = () => {
   const playerContainerRef = useRef<HTMLDivElement>(null)
   const [isPlayerReady, setIsPlayerReady] = useState(false)
   const [error, setError] = useState<PlayerError | null>(null)
+  const [subtitleCues, setSubtitleCues] = useState<SubtitleCue[]>([])
+  const [currentTime, setCurrentTime] = useState(0)
+  const timeUpdateRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const { 
     currentSong, 
@@ -168,23 +173,76 @@ const DisplayApp: React.FC = () => {
     setPlaybackState(PlaybackState.ERROR)
   }, [currentSong?.videoId, setPlaybackState])
 
-  // Handle song changes
+  // Handle song changes — load video and fetch captions
   useEffect(() => {
-    if (!isPlayerReady || !playerRef.current || !currentSong) return
+    if (!isPlayerReady || !playerRef.current || !currentSong) {
+      setSubtitleCues([])
+      return
+    }
 
     try {
       console.log('Loading video:', currentSong.videoId)
       setPlaybackState(PlaybackState.LOADING)
       playerRef.current.loadVideoById(currentSong.videoId)
+
+      // Try to fetch captions from Invidious
+      const client = new YouTubeClient()
+      client.getCaptions(currentSong.videoId).then(async (tracks) => {
+        if (tracks.length === 0) {
+          setSubtitleCues([])
+          return
+        }
+        // Prefer Chinese or English captions
+        const preferred = tracks.find(t => /^(zh|ja|ko)/.test(t.languageCode))
+          || tracks.find(t => /^en/.test(t.languageCode))
+          || tracks[0]
+
+        try {
+          const resp = await fetch(preferred.url)
+          const text = await resp.text()
+          // Invidious returns VTT/SRT-like format
+          const cues = parseSRT(text)
+          console.log(`[Subtitle] Loaded ${cues.length} cues (${preferred.label})`)
+          setSubtitleCues(cues)
+        } catch (e) {
+          console.warn('[Subtitle] Failed to load caption track:', e)
+          setSubtitleCues([])
+        }
+      }).catch(() => setSubtitleCues([]))
     } catch (err) {
       console.error('Failed to load video:', err)
-      setError({ 
+      setError({
         message: 'Failed to load video',
-        videoId: currentSong.videoId 
+        videoId: currentSong.videoId
       })
       setPlaybackState(PlaybackState.ERROR)
     }
   }, [currentSong, isPlayerReady, setPlaybackState])
+
+  // Time update interval for subtitle sync
+  useEffect(() => {
+    if (playbackState === PlaybackState.PLAYING && playerRef.current && subtitleCues.length > 0) {
+      timeUpdateRef.current = setInterval(() => {
+        if (playerRef.current) {
+          try {
+            setCurrentTime(playerRef.current.getCurrentTime() || 0)
+          } catch {}
+        }
+      }, 200) // 5x per second for smooth subtitle sync
+    } else {
+      if (timeUpdateRef.current) {
+        clearInterval(timeUpdateRef.current)
+        timeUpdateRef.current = null
+      }
+    }
+
+    return () => {
+      if (timeUpdateRef.current) {
+        clearInterval(timeUpdateRef.current)
+        timeUpdateRef.current = null
+      }
+    }
+  }, [playbackState, subtitleCues.length])
 
   // IPC handlers for comprehensive player control
   useEffect(() => {
@@ -397,6 +455,15 @@ const DisplayApp: React.FC = () => {
           </div>
         )}
 
+        {/* Subtitle Overlay */}
+        {subtitleCues.length > 0 && (
+          <SubtitleOverlay
+            cues={subtitleCues}
+            currentTime={currentTime}
+            position="overlay"
+          />
+        )}
+
         {/* Loading Overlay */}
         {playbackState === PlaybackState.LOADING && !error && (
           <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
@@ -407,6 +474,15 @@ const DisplayApp: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Subtitle Bar (below video) */}
+      {subtitleCues.length > 0 && (
+        <SubtitleOverlay
+          cues={subtitleCues}
+          currentTime={currentTime}
+          position="below"
+        />
+      )}
 
       {/* Bottom Status Bar */}
       {currentSong && (

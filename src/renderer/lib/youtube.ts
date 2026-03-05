@@ -1,349 +1,189 @@
-// AIPC KTV - YouTube Data API v3 Client
+// AIPC KTV - Video Search Client (Invidious API, no API key required)
 
-/**
- * YouTube Data API v3 client for searching videos and retrieving metadata
- * Handles rate limiting, quota management, and error cases
- */
-
-import type { Song } from '../types';
+import type { Song } from '../types'
 
 export interface YouTubeSearchOptions {
-  query: string;
-  maxResults?: number;
+  query: string
+  maxResults?: number
 }
 
 export interface YouTubeVideoDetails {
-  videoId: string;
-  title: string;
-  channelTitle: string;
-  description: string;
-  publishedAt: string;
+  videoId: string
+  title: string
+  channelTitle: string
+  description: string
+  publishedAt: string
   thumbnail: {
-    url: string;
-    width: number;
-    height: number;
-  };
-  duration: number; // seconds
-  viewCount: number;
-  likeCount: number;
+    url: string
+    width: number
+    height: number
+  }
+  duration: number // seconds
+  viewCount: number
+  likeCount: number
 }
 
 export interface YouTubeSearchResult {
-  videos: YouTubeVideoDetails[];
-  nextPageToken?: string;
-  totalResults?: number;
+  videos: YouTubeVideoDetails[]
+  nextPageToken?: string
+  totalResults?: number
 }
 
 export interface YouTubeError {
-  code: number;
-  message: string;
-  reason?: string;
+  code: number
+  message: string
+  reason?: string
 }
 
-// Rate limiting configuration
-const RATE_LIMIT = {
-  REQUESTS_PER_MINUTE: 100,
-  REQUESTS_PER_DAY: 10000,
-  MIN_REQUEST_INTERVAL: 600, // ms between requests
-};
-
-// Quota tracking
-class QuotaManager {
-  private requestsThisMinute: number = 0;
-  private requestsToday: number = 0;
-  private lastRequestTime: number = 0;
-  private minuteStartTime: number = Date.now();
-  private dayStartTime: number = Date.now();
-
-  private resetIfNecessary(): void {
-    const now = Date.now();
-
-    // Reset minute counter every 60 seconds
-    if (now - this.minuteStartTime >= 60000) {
-      this.requestsThisMinute = 0;
-      this.minuteStartTime = now;
-    }
-
-    // Reset day counter every 24 hours
-    if (now - this.dayStartTime >= 86400000) {
-      this.requestsToday = 0;
-      this.dayStartTime = now;
-    }
-  }
-
-  async waitForAvailability(): Promise<void> {
-    this.resetIfNecessary();
-
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-    const timeUntilNextRequest = Math.max(0, RATE_LIMIT.MIN_REQUEST_INTERVAL - timeSinceLastRequest);
-
-    if (timeUntilNextRequest > 0) {
-      await new Promise(resolve => setTimeout(resolve, timeUntilNextRequest));
-    }
-
-    if (this.requestsThisMinute >= RATE_LIMIT.REQUESTS_PER_MINUTE) {
-      const timeUntilNextMinute = 60000 - (now - this.minuteStartTime);
-      throw new Error(
-        `Rate limit exceeded: ${RATE_LIMIT.REQUESTS_PER_MINUTE} requests per minute. Please wait ${Math.ceil(timeUntilNextMinute / 1000)} seconds.`
-      );
-    }
-
-    if (this.requestsToday >= RATE_LIMIT.REQUESTS_PER_DAY) {
-      throw new Error(
-        `Daily quota exceeded: ${RATE_LIMIT.REQUESTS_PER_DAY} requests per day. Please try again tomorrow.`
-      );
-    }
-  }
-
-  recordRequest(): void {
-    this.requestsThisMinute++;
-    this.requestsToday++;
-    this.lastRequestTime = Date.now();
-  }
-
-  getStatus(): { minuteUsed: number; minuteLimit: number; dayUsed: number; dayLimit: number } {
-    this.resetIfNecessary();
-    return {
-      minuteUsed: this.requestsThisMinute,
-      minuteLimit: RATE_LIMIT.REQUESTS_PER_MINUTE,
-      dayUsed: this.requestsToday,
-      dayLimit: RATE_LIMIT.REQUESTS_PER_DAY,
-    };
-  }
-}
-
-// Global quota manager instance
-const quotaManager = new QuotaManager();
+// Public Invidious instances (fallback chain)
+const INVIDIOUS_INSTANCES = [
+  'https://inv.nadeko.net',
+  'https://invidious.nerdvpn.de',
+  'https://invidious.jing.rocks',
+  'https://vid.puffyan.us',
+]
 
 /**
- * YouTube Data API v3 Client
+ * Video Search Client using Invidious API (no API key required)
+ * Playback still uses YouTube IFrame Player API (official, compliant)
  */
 export class YouTubeClient {
-  private apiKey: string;
-  private baseUrl: string;
+  private instances: string[]
+  private currentIndex: number = 0
 
-  constructor(apiKey?: string) {
-    this.apiKey = apiKey || process.env.VITE_YOUTUBE_API_KEY || '';
-    
-    if (!this.apiKey) {
-      throw new Error('YouTube API key is required. Set VITE_YOUTUBE_API_KEY environment variable or pass apiKey to constructor.');
-    }
+  constructor(_apiKey?: string) {
+    // apiKey parameter kept for backward compatibility but not used
+    this.instances = [...INVIDIOUS_INSTANCES]
+  }
 
-    this.baseUrl = 'https://www.googleapis.com/youtube/v3';
+  private get baseUrl(): string {
+    return this.instances[this.currentIndex]
+  }
+
+  private rotateInstance(): void {
+    this.currentIndex = (this.currentIndex + 1) % this.instances.length
   }
 
   /**
-   * Parse ISO 8601 duration string (PT1M30S) to seconds
+   * Make request with instance fallback
    */
-  private parseDuration(isoDuration: string): number {
-    const match = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-    if (!match) return 0;
+  private async request<T>(path: string): Promise<T> {
+    let lastError: Error | null = null
 
-    const hours = parseInt(match[1] || '0', 10);
-    const minutes = parseInt(match[2] || '0', 10);
-    const seconds = parseInt(match[3] || '0', 10);
+    for (let attempt = 0; attempt < this.instances.length; attempt++) {
+      const url = `${this.baseUrl}/api/v1${path}`
+      try {
+        const response = await fetch(url, {
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(10000),
+        })
 
-    return hours * 3600 + minutes * 60 + seconds;
-  }
+        if (!response.ok) {
+          throw new YouTubeAPIError({
+            code: response.status,
+            message: `${response.statusText} from ${this.baseUrl}`,
+          })
+        }
 
-  /**
-   * Handle API errors
-   */
-  private handleAPIError(response: Response, data?: any): never {
-    const error: YouTubeError = {
-      code: response.status,
-      message: response.statusText || 'Unknown error',
-    };
-
-    if (data?.error) {
-      error.reason = data.error.errors?.[0]?.reason;
-      error.message = data.error.message || error.message;
-    }
-
-    throw new YouTubeAPIError(error);
-  }
-
-  /**
-   * Execute API request with quota management
-   */
-  private async request<T>(endpoint: string, params: Record<string, string>): Promise<T> {
-    await quotaManager.waitForAvailability();
-
-    const url = new URL(`${this.baseUrl}${endpoint}`);
-    url.searchParams.append('key', this.apiKey);
-    
-    Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.append(key, value);
-    });
-
-    try {
-      quotaManager.recordRequest();
-
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        this.handleAPIError(response, data);
+        return (await response.json()) as T
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err))
+        console.warn(`[Search] ${this.baseUrl} failed: ${lastError.message}, trying next...`)
+        this.rotateInstance()
       }
-
-      return data as T;
-    } catch (error) {
-      if (error instanceof YouTubeAPIError) {
-        throw error;
-      }
-      throw new YouTubeAPIError({
-        code: 0,
-        message: error instanceof Error ? error.message : 'Network error',
-      });
     }
+
+    throw new YouTubeAPIError({
+      code: 0,
+      message: `All Invidious instances failed. Last error: ${lastError?.message}`,
+    })
   }
 
   /**
-   * Search for YouTube videos
+   * Search for videos
    */
   async searchVideos(options: YouTubeSearchOptions): Promise<YouTubeSearchResult> {
-    const { query, maxResults = 10 } = options;
+    const { query, maxResults = 10 } = options
 
-    if (!query || query.trim().length === 0) {
-      throw new YouTubeAPIError({
-        code: 400,
-        message: 'Search query is required',
-        reason: 'INVALID_QUERY',
-      });
+    if (!query?.trim()) {
+      throw new YouTubeAPIError({ code: 400, message: 'Search query is required', reason: 'INVALID_QUERY' })
     }
 
-    const data = await this.request<{
-      items: Array<{
-        id: { videoId: string };
-        snippet: {
-          title: string;
-          channelTitle: string;
-          description: string;
-          publishedAt: string;
-          thumbnails: {
-            default: { url: string; width: number; height: number };
-            medium: { url: string; width: number; height: number };
-            high: { url: string; width: number; height: number };
-          };
-        };
-      }>;
-      nextPageToken: string;
-      pageInfo: { totalResults: number };
-    }>('/search', {
-      part: 'snippet',
-      q: query,
-      type: 'video',
-      maxResults: maxResults.toString(),
-      order: 'relevance',
-      videoDefinition: 'high',
-      videoEmbeddable: 'true',
-    });
+    const encoded = encodeURIComponent(query.trim())
+    const results = await this.request<InvidiousSearchItem[]>(
+      `/search?q=${encoded}&type=video&sort_by=relevance`
+    )
 
-    const videos = data.items.map(item => ({
-      videoId: item.id.videoId,
-      title: item.snippet.title,
-      channelTitle: item.snippet.channelTitle,
-      description: item.snippet.description,
-      publishedAt: item.snippet.publishedAt,
-      thumbnail: item.snippet.thumbnails.high || item.snippet.thumbnails.medium || item.snippet.thumbnails.default,
-      duration: 0, // Will be filled by getVideoDetails if needed
-      viewCount: 0,
-      likeCount: 0,
-    }));
+    const videos: YouTubeVideoDetails[] = results
+      .filter((item) => item.type === 'video')
+      .slice(0, maxResults)
+      .map((item) => ({
+        videoId: item.videoId,
+        title: item.title,
+        channelTitle: item.author,
+        description: item.description || '',
+        publishedAt: new Date((item.published || 0) * 1000).toISOString(),
+        thumbnail: {
+          url: item.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`,
+          width: item.videoThumbnails?.[0]?.width || 480,
+          height: item.videoThumbnails?.[0]?.height || 360,
+        },
+        duration: item.lengthSeconds || 0,
+        viewCount: item.viewCount || 0,
+        likeCount: 0,
+      }))
 
-    return {
-      videos,
-      nextPageToken: data.nextPageToken,
-      totalResults: data.pageInfo?.totalResults,
-    };
+    return { videos, totalResults: videos.length }
   }
 
   /**
-   * Get detailed video information
+   * Get video details
    */
   async getVideoDetails(videoId: string): Promise<YouTubeVideoDetails> {
-    if (!videoId || videoId.trim().length === 0) {
-      throw new YouTubeAPIError({
-        code: 400,
-        message: 'Video ID is required',
-        reason: 'INVALID_VIDEO_ID',
-      });
+    if (!videoId?.trim()) {
+      throw new YouTubeAPIError({ code: 400, message: 'Video ID is required', reason: 'INVALID_VIDEO_ID' })
     }
 
-    const data = await this.request<{
-      items: Array<{
-        id: string;
-        snippet: {
-          title: string;
-          channelTitle: string;
-          description: string;
-          publishedAt: string;
-          thumbnails: {
-            default: { url: string; width: number; height: number };
-            medium: { url: string; width: number; height: number };
-            high: { url: string; width: number; height: number };
-            maxres: { url: string; width: number; height: number };
-          };
-        };
-        contentDetails: {
-          duration: string;
-        };
-        statistics: {
-          viewCount: string;
-          likeCount: string;
-        };
-      }>;
-    }>('/videos', {
-      part: 'snippet,contentDetails,statistics',
-      id: videoId,
-    });
-
-    if (!data.items || data.items.length === 0) {
-      throw new YouTubeAPIError({
-        code: 404,
-        message: `Video not found: ${videoId}`,
-        reason: 'VIDEO_NOT_FOUND',
-      });
-    }
-
-    const item = data.items[0];
+    const item = await this.request<InvidiousVideoItem>(`/videos/${videoId}`)
 
     return {
-      videoId: item.id,
-      title: item.snippet.title,
-      channelTitle: item.snippet.channelTitle,
-      description: item.snippet.description,
-      publishedAt: item.snippet.publishedAt,
-      thumbnail: item.snippet.thumbnails.maxres || item.snippet.thumbnails.high || item.snippet.thumbnails.medium || item.snippet.thumbnails.default,
-      duration: this.parseDuration(item.contentDetails.duration),
-      viewCount: parseInt(item.statistics.viewCount || '0', 10),
-      likeCount: parseInt(item.statistics.likeCount || '0', 10),
-    };
+      videoId: item.videoId,
+      title: item.title,
+      channelTitle: item.author,
+      description: item.description || '',
+      publishedAt: new Date((item.published || 0) * 1000).toISOString(),
+      thumbnail: {
+        url: item.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        width: item.videoThumbnails?.[0]?.width || 480,
+        height: item.videoThumbnails?.[0]?.height || 360,
+      },
+      duration: item.lengthSeconds || 0,
+      viewCount: item.viewCount || 0,
+      likeCount: item.likeCount || 0,
+    }
   }
 
   /**
-   * Search videos with full details
+   * Search with full details (for Invidious, search already returns details)
    */
   async searchVideosWithDetails(options: YouTubeSearchOptions): Promise<YouTubeSearchResult> {
-    const searchResult = await this.searchVideos(options);
+    return this.searchVideos(options)
+  }
 
-    // Get details for each video in parallel
-    const videosWithDetails = await Promise.all(
-      searchResult.videos.map(video => this.getVideoDetails(video.videoId))
-    );
-
-    return {
-      videos: videosWithDetails,
-      nextPageToken: searchResult.nextPageToken,
-      totalResults: searchResult.totalResults,
-    };
+  /**
+   * Get captions/subtitles for a video
+   */
+  async getCaptions(videoId: string): Promise<CaptionTrack[]> {
+    try {
+      const video = await this.request<InvidiousVideoItem>(`/videos/${videoId}`)
+      return (video.captions || []).map((c) => ({
+        label: c.label,
+        languageCode: c.language_code,
+        url: `${this.baseUrl}${c.url}`,
+      }))
+    } catch {
+      return []
+    }
   }
 
   /**
@@ -356,69 +196,69 @@ export class YouTubeClient {
       channel: details.channelTitle,
       thumbnail: details.thumbnail.url,
       duration: details.duration,
-    };
+    }
   }
 
-  /**
-   * Get current quota status
-   */
-  static getQuotaStatus(): ReturnType<QuotaManager['getStatus']> {
-    return quotaManager.getStatus();
+  static getQuotaStatus() {
+    return { minuteUsed: 0, minuteLimit: 0, dayUsed: 0, dayLimit: 0 }
   }
 }
 
-/**
- * Custom error class for YouTube API errors
- */
+// Invidious API response types
+interface InvidiousSearchItem {
+  type: string
+  videoId: string
+  title: string
+  author: string
+  description?: string
+  published?: number
+  lengthSeconds?: number
+  viewCount?: number
+  videoThumbnails?: Array<{ url: string; width: number; height: number }>
+}
+
+interface InvidiousVideoItem {
+  videoId: string
+  title: string
+  author: string
+  description?: string
+  published?: number
+  lengthSeconds?: number
+  viewCount?: number
+  likeCount?: number
+  videoThumbnails?: Array<{ url: string; width: number; height: number }>
+  captions?: Array<{ label: string; language_code: string; url: string }>
+}
+
+export interface CaptionTrack {
+  label: string
+  languageCode: string
+  url: string
+}
+
 export class YouTubeAPIError extends Error {
-  public readonly code: number;
-  public readonly reason?: string;
+  public readonly code: number
+  public readonly reason?: string
 
   constructor(error: YouTubeError) {
-    super(error.message);
-    this.name = 'YouTubeAPIError';
-    this.code = error.code;
-    this.reason = error.reason;
+    super(error.message)
+    this.name = 'YouTubeAPIError'
+    this.code = error.code
+    this.reason = error.reason
   }
 
-  /**
-   * Check if error is due to quota exceeded
-   */
-  isQuotaExceeded(): boolean {
-    return this.code === 429 || this.reason === 'quotaExceeded';
-  }
-
-  /**
-   * Check if error is due to invalid API key
-   */
-  isInvalidKey(): boolean {
-    return this.code === 403 && (this.reason === 'keyInvalid' || this.reason === 'forbidden');
-  }
-
-  /**
-   * Check if error is due to rate limiting
-   */
-  isRateLimited(): boolean {
-    return this.code === 429;
-  }
+  isQuotaExceeded(): boolean { return false }
+  isInvalidKey(): boolean { return false }
+  isRateLimited(): boolean { return this.code === 429 }
 }
 
-// Default client instance
-let defaultClient: YouTubeClient | null = null;
+let defaultClient: YouTubeClient | null = null
 
-/**
- * Get or create the default YouTube client
- */
 export function getYouTubeClient(apiKey?: string): YouTubeClient {
-  if (!defaultClient) {
-    defaultClient = new YouTubeClient(apiKey);
-  }
-  return defaultClient;
+  if (!defaultClient) defaultClient = new YouTubeClient(apiKey)
+  return defaultClient
 }
 
-/**
- * Reset the default client (useful for testing)
- */
 export function resetYouTubeClient(): void {
-  defaultClient = null;
+  defaultClient = null
 }
