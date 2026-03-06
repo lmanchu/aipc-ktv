@@ -3,6 +3,8 @@ import React, { useEffect, useRef, useState } from 'react'
 const DisplayApp: React.FC = () => {
   const [videoId, setVideoId] = useState<string | null>(null)
   const [subtitleText, setSubtitleText] = useState<string>('')
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const listeningRef = useRef(false)
 
   // Read videoId from URL query param (set by main process)
   useEffect(() => {
@@ -33,6 +35,51 @@ const DisplayApp: React.FC = () => {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [videoId])
 
+  // YouTube IFrame API: detect video ended via postMessage
+  useEffect(() => {
+    if (!videoId) return
+
+    const handleMessage = (event: MessageEvent) => {
+      // YouTube sends JSON strings via postMessage
+      if (typeof event.data !== 'string') return
+      try {
+        const data = JSON.parse(event.data)
+        // YouTube IFrame API: info.playerState = 0 means ENDED
+        if (data.event === 'onStateChange' && data.info === 0) {
+          console.log('[Display] Video ended, notifying main process')
+          window.electron?.ipcRenderer?.send('video-ended')
+        }
+      } catch {
+        // Not JSON, ignore
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+
+    // Tell YouTube iframe to start sending events
+    // Need small delay for iframe to load
+    const timer = setTimeout(() => {
+      if (iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'listening', id: 1 }),
+          'https://www.youtube.com'
+        )
+        // Also subscribe to onStateChange
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'addEventListener', args: ['onStateChange'] }),
+          'https://www.youtube.com'
+        )
+        listeningRef.current = true
+      }
+    }, 1500)
+
+    return () => {
+      window.removeEventListener('message', handleMessage)
+      clearTimeout(timer)
+      listeningRef.current = false
+    }
+  }, [videoId])
+
   if (!videoId) {
     return (
       <div style={{
@@ -51,7 +98,8 @@ const DisplayApp: React.FC = () => {
       {/* YouTube video — takes most of the screen */}
       <div style={{ flex: 1, position: 'relative' }}>
         <iframe
-          src={`https://www.youtube.com/embed/${videoId}?autoplay=1&controls=1&rel=0&modestbranding=1`}
+          ref={iframeRef}
+          src={`https://www.youtube.com/embed/${videoId}?autoplay=1&controls=1&rel=0&modestbranding=1&enablejsapi=1&origin=${window.location.origin}`}
           style={{ width: '100%', height: '100%', border: 'none' }}
           allow="autoplay; encrypted-media; fullscreen"
           allowFullScreen
