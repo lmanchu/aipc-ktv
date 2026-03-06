@@ -162,6 +162,48 @@ const DisplayApp: React.FC = () => {
     }
   }, [videoId])
 
+  // Listen for player control commands from main process via IPC
+  useEffect(() => {
+    if (!window.electron?.ipcRenderer) return
+
+    const sendYTCommand = (func: string, ...args: any[]) => {
+      if (!iframeRef.current?.contentWindow || !listeningRef.current) return
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: 'command', func, args }),
+        'https://www.youtube.com'
+      )
+    }
+
+    const handleControl = (command: string, ...args: any[]) => {
+      console.log('[Display] Player control:', command, args)
+      switch (command) {
+        case 'pause-video':
+          sendYTCommand('pauseVideo')
+          break
+        case 'stop-video':
+          sendYTCommand('stopVideo')
+          break
+        case 'set-volume':
+          sendYTCommand('setVolume', args[0] ?? 100)
+          break
+        case 'mute':
+          sendYTCommand('mute')
+          break
+        case 'unmute':
+          sendYTCommand('unMute')
+          break
+        case 'seek-to':
+          sendYTCommand('seekTo', args[0] ?? 0, true)
+          break
+      }
+    }
+
+    window.electron.ipcRenderer.on('youtube-player-control', handleControl)
+    return () => {
+      window.electron?.ipcRenderer?.removeAllListeners('youtube-player-control')
+    }
+  }, [])
+
   // Load subtitles when videoId changes
   useEffect(() => {
     if (!videoId) return
