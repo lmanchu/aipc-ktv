@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { devtools } from 'zustand/middleware'
+import { devtools, persist } from 'zustand/middleware'
 import type { Song, Queue } from '../types'
 import { PlaybackState } from '../types'
 
@@ -21,6 +21,7 @@ interface QueueStore extends Queue, QueueActions {}
 
 export const useQueueStore = create<QueueStore>()(
   devtools(
+    persist(
     (set, get) => ({
       // Initial state
       currentSong: null,
@@ -152,6 +153,14 @@ export const useQueueStore = create<QueueStore>()(
         state.reorderQueue(fromIndex, toIndex)
       },
     }),
+    {
+      name: 'ktv-queue',
+      partialize: (state) => ({
+        currentSong: state.currentSong,
+        upcomingSongs: state.upcomingSongs,
+      }),
+    }
+    ),
     {
       name: 'queue-store',
     }
