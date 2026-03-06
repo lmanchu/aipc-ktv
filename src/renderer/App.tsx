@@ -1,18 +1,16 @@
-import { useState, useEffect } from 'react'
-import UpdateElectron from './components/update'
+import { useState, useEffect, useRef } from 'react'
 import { useYouTubePlayer } from './hooks/useYouTubePlayer'
 import { useQueueStore } from './store'
 import { PlaybackState } from '../shared/types'
-import SearchPanel from './components/search/SearchPanel'
+import YouTubeBrowser from './components/browser/YouTubeBrowser'
 import QueuePanel from './components/queue/QueuePanel'
 import PlaylistPanel from './components/playlist/PlaylistPanel'
 import './App.css'
 
 function App() {
-  const [testVideoId, setTestVideoId] = useState('dQw4w9WgXcQ') // Rick Roll for testing
-  const [seekTime, setSeekTime] = useState(0)
   const [volume, setVolume] = useState(50)
-  
+  const prevSongRef = useRef<string | null>(null)
+
   const {
     isDisplayWindowOpen,
     openDisplayWindow,
@@ -20,228 +18,143 @@ function App() {
     playVideo,
     pauseVideo,
     stopVideo,
-    seekTo,
     setVolume: setPlayerVolume,
     mute,
     unmute,
-    getPlayerState,
-    playerState,
-    lastError,
   } = useYouTubePlayer()
 
-  const { 
-    currentSong, 
-    upcomingSongs, 
-    playbackState, 
-    addSong, 
-    nextSong, 
-    clearQueue 
+  const {
+    currentSong,
+    upcomingSongs,
+    playbackState,
+    nextSong,
   } = useQueueStore()
 
-  // Listen for player state changes from display window
+  // Auto-open display window on mount
+  useEffect(() => {
+    openDisplayWindow()
+  }, [])
+
+  // KEY: When currentSong changes, send play command to Display Window via IPC
+  useEffect(() => {
+    if (!currentSong || !isDisplayWindowOpen) return
+    // Only send if song actually changed
+    if (prevSongRef.current === currentSong.videoId) return
+    prevSongRef.current = currentSong.videoId
+
+    console.log('[Control] Playing video:', currentSong.videoId, currentSong.title)
+    // Small delay to ensure display window is ready
+    setTimeout(() => {
+      playVideo(currentSong.videoId)
+    }, 300)
+  }, [currentSong, isDisplayWindowOpen, playVideo])
+
+  // Listen for video-ended from Display Window → auto-advance
   useEffect(() => {
     if (!window.electron?.ipcRenderer) return
-
     const { ipcRenderer } = window.electron
 
-    const handlePlayerStateChanged = (stateData: any) => {
-      console.log('Player state changed:', stateData)
-    }
-
     const handleVideoEnded = () => {
-      console.log('Video ended, auto-advancing queue')
+      console.log('[Control] Video ended, advancing queue')
       nextSong()
     }
 
-    const handleVolumeChanged = (volumeData: any) => {
-      setVolume(volumeData.volume)
-      console.log('Volume changed:', volumeData)
-    }
-
-    ipcRenderer.on('player-state-changed', handlePlayerStateChanged)
     ipcRenderer.on('video-ended', handleVideoEnded)
-    ipcRenderer.on('volume-changed', handleVolumeChanged)
-
     return () => {
-      if (window.electron?.ipcRenderer) {
-        window.electron.ipcRenderer.removeAllListeners('player-state-changed')
-        window.electron.ipcRenderer.removeAllListeners('video-ended')
-        window.electron.ipcRenderer.removeAllListeners('volume-changed')
-      }
+      window.electron?.ipcRenderer?.removeAllListeners('video-ended')
     }
   }, [nextSong])
-
-  const handleTestSong = () => {
-    const testSong = {
-      videoId: testVideoId,
-      title: 'Test Video',
-      channel: 'Test Channel',
-      thumbnail: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/default.jpg',
-      duration: 212, // 3:32
-    }
-    addSong(testSong)
-  }
 
   const handleVolumeChange = (newVolume: number) => {
     setVolume(newVolume)
     setPlayerVolume(newVolume)
   }
-  
+
+  const handleSkip = () => {
+    stopVideo()
+    nextSong()
+  }
+
   return (
-    <div className="App">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-blue-600">AIPC KTV Control</h1>
-        <p className="text-lg text-gray-600 mt-2">Karaoke Control Center</p>
+    <div className="App flex flex-col h-screen">
+      {/* Header with player controls */}
+      <header className="shrink-0 px-4 py-2 border-b bg-white">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-blue-600">AIPC KTV</h1>
+          <div className="flex items-center gap-2">
+            <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+              playbackState === PlaybackState.PLAYING ? 'bg-green-100 text-green-800' :
+              playbackState === PlaybackState.PAUSED ? 'bg-yellow-100 text-yellow-800' :
+              playbackState === PlaybackState.LOADING ? 'bg-blue-100 text-blue-800' :
+              playbackState === PlaybackState.ERROR ? 'bg-red-100 text-red-800' :
+              'bg-gray-100 text-gray-800'
+            }`}>
+              {playbackState.toUpperCase()}
+            </div>
+            <span className={`inline-block w-2 h-2 rounded-full ${
+              isDisplayWindowOpen ? 'bg-green-500' : 'bg-red-500'
+            }`} />
+            {!isDisplayWindowOpen && (
+              <button onClick={openDisplayWindow}
+                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">
+                Open Display
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Now Playing bar */}
+        {currentSong && (
+          <div className="flex items-center gap-3 mt-2 pt-2 border-t">
+            <img src={currentSong.thumbnail} alt="" className="w-10 h-10 rounded object-cover" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{currentSong.title}</p>
+              <p className="text-xs text-gray-500 truncate">{currentSong.channel}</p>
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => playVideo()}
+                className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                disabled={!isDisplayWindowOpen}>
+                Play
+              </button>
+              <button onClick={pauseVideo}
+                className="px-2 py-1 text-xs bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
+                disabled={!isDisplayWindowOpen}>
+                Pause
+              </button>
+              {/* Skip / 切歌 — the KTV essential button */}
+              <button onClick={handleSkip}
+                className="px-3 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 font-bold"
+                disabled={!isDisplayWindowOpen}>
+                切歌
+              </button>
+            </div>
+            <div className="flex items-center gap-1 ml-1">
+              <button onClick={mute} disabled={!isDisplayWindowOpen} className="text-xs text-gray-400 hover:text-gray-700">Mute</button>
+              <input type="range" min="0" max="100" value={volume}
+                onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                className="w-16" disabled={!isDisplayWindowOpen} />
+              <span className="text-xs text-gray-400 w-7">{volume}%</span>
+            </div>
+            {upcomingSongs.length > 0 && (
+              <span className="text-xs text-gray-400">Next: {upcomingSongs[0].title.slice(0, 20)}...</span>
+            )}
+          </div>
+        )}
       </header>
-      
-      <main className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="card">
-            <SearchPanel />
-          </div>
-          <div className="card">
-            <QueuePanel />
-          </div>
+
+      <main className="flex-1 flex overflow-hidden">
+        {/* Left: YouTube Browser */}
+        <div className="flex-1 p-2 flex flex-col">
+          <YouTubeBrowser />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="card">
-            <h2 className="text-xl font-semibold mb-4">Display Window</h2>
-            <div className="status-indicator mb-4">
-              <span className={`inline-block w-3 h-3 rounded-full mr-2 ${
-                isDisplayWindowOpen ? 'bg-green-500' : 'bg-red-500'
-              }`}></span>
-              <span>Status: {isDisplayWindowOpen ? 'Connected' : 'Disconnected'}</span>
-            </div>
-            <div className="space-y-2">
-              <button 
-                className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                onClick={openDisplayWindow}
-                disabled={isDisplayWindowOpen}
-              >
-                Open Display Window
-              </button>
-              <button 
-                className="w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-                onClick={closeDisplayWindow}
-                disabled={!isDisplayWindowOpen}
-              >
-                Close Display Window
-              </button>
-            </div>
-          </div>
-          
-          <div className="card">
-            <h2 className="text-xl font-semibold mb-4">Player Controls</h2>
-            <div className="mb-4">
-              <div className={`px-3 py-1 rounded-full text-sm font-medium inline-block ${
-                playbackState === PlaybackState.PLAYING ? 'bg-green-100 text-green-800' :
-                playbackState === PlaybackState.PAUSED ? 'bg-yellow-100 text-yellow-800' :
-                playbackState === PlaybackState.LOADING ? 'bg-blue-100 text-blue-800' :
-                playbackState === PlaybackState.ERROR ? 'bg-red-100 text-red-800' :
-                'bg-gray-100 text-gray-800'
-              }`}>
-                {playbackState.toUpperCase()}
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <button 
-                className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                onClick={() => playVideo()}
-                disabled={!isDisplayWindowOpen}
-              >
-                ▶️ Play
-              </button>
-              <button 
-                className="px-3 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
-                onClick={pauseVideo}
-                disabled={!isDisplayWindowOpen}
-              >
-                ⏸️ Pause
-              </button>
-              <button 
-                className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-                onClick={stopVideo}
-                disabled={!isDisplayWindowOpen}
-              >
-                ⏹️ Stop
-              </button>
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Seek to (seconds):</label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  value={seekTime}
-                  onChange={(e) => setSeekTime(Number(e.target.value))}
-                  className="flex-1 px-3 py-2 border rounded"
-                  min="0"
-                />
-                <button 
-                  className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-                  onClick={() => seekTo(seekTime)}
-                  disabled={!isDisplayWindowOpen}
-                >
-                  Seek
-                </button>
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Volume: {volume}%</label>
-              <div className="flex gap-2 items-center">
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={volume}
-                  onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                  className="flex-1"
-                  disabled={!isDisplayWindowOpen}
-                />
-                <button 
-                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
-                  onClick={mute}
-                  disabled={!isDisplayWindowOpen}
-                >
-                  🔇
-                </button>
-                <button 
-                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
-                  onClick={unmute}
-                  disabled={!isDisplayWindowOpen}
-                >
-                  🔊
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
+        {/* Right: Queue + Playlists sidebar */}
+        <div className="w-80 border-l bg-gray-50 overflow-y-auto p-3 space-y-4">
+          <QueuePanel />
+          <hr />
           <PlaylistPanel />
         </div>
-
-        <div className="card">
-          <h2 className="text-xl font-semibold mb-4">Player State Debug</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <h3 className="font-semibold mb-2">Current State:</h3>
-              <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-                {playerState ? JSON.stringify(playerState, null, 2) : 'No state available'}
-              </pre>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-2">Errors:</h3>
-              <pre className="bg-red-100 p-3 rounded text-sm overflow-x-auto">
-                {lastError || 'No errors'}
-              </pre>
-            </div>
-          </div>
-        </div>
-
-        <UpdateElectron />
       </main>
     </div>
   )

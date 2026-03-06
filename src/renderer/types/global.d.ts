@@ -55,9 +55,15 @@ export interface ElectronYouTubePlayerAPI {
   control: (command: string, ...args: any[]) => Promise<{ success: boolean; error?: string }>
 }
 
+export interface ElectronSubtitleCacheAPI {
+  read: (videoId: string) => Promise<{ found: boolean; content?: string }>
+  write: (videoId: string, content: string) => Promise<{ success: boolean; error?: string }>
+}
+
 export interface ElectronAPI {
   ipcRenderer: ElectronIpcRenderer
   youtubePlayer: ElectronYouTubePlayerAPI
+  subtitleCache: ElectronSubtitleCacheAPI
 }
 
 // Global window extensions

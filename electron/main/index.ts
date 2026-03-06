@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
+import fs from 'node:fs'
 import { update } from './update'
 
 const require = createRequire(import.meta.url)
@@ -34,6 +35,15 @@ if (os.release().startsWith('6.1')) app.disableHardwareAcceleration()
 // Set application name for Windows 10+ notifications
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
+// Enable webview tag for embedded YouTube browser
+app.on('web-contents-created', (_, contents) => {
+  contents.on('will-attach-webview', (event, webPreferences) => {
+    // Allow webview to load YouTube
+    webPreferences.nodeIntegration = false
+    webPreferences.contextIsolation = false
+  })
+})
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
   process.exit(0)
@@ -55,6 +65,8 @@ async function createWindow() {
       preload,
       nodeIntegration: false,
       contextIsolation: true,
+      webSecurity: false,
+      webviewTag: true, // Enable <webview> for embedded YouTube browser
     },
   })
 
@@ -135,7 +147,8 @@ async function createDisplayWindow() {
       preload,
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false, // Allow YouTube iframe
+      webSecurity: false,
+      webviewTag: true,
     },
   })
 
@@ -252,6 +265,18 @@ ipcMain.handle('youtube-player-control', (_, command: string, ...args: any[]) =>
   }
 
   try {
+    // For play-video, navigate display window to our display page with videoId
+    if (command === 'play-video' && args[0]) {
+      const videoId = args[0]
+      if (VITE_DEV_SERVER_URL) {
+        displayWin.loadURL(`${VITE_DEV_SERVER_URL}display.html?v=${videoId}`)
+      } else {
+        displayWin.loadFile(displayHtml, { query: { v: videoId } })
+      }
+      return { success: true }
+    }
+
+    // Forward other commands via IPC
     displayWin.webContents.send('youtube-player-control', command, ...args)
     return { success: true }
   } catch (error) {
@@ -294,6 +319,31 @@ ipcMain.on('volume-changed', (_, volumeData) => {
 ipcMain.on('queue-update-request', (_, queueData) => {
   if (win && !win.isDestroyed()) {
     win.webContents.send('queue-update-request', queueData)
+  }
+})
+
+// Subtitle cache: read/write SRT files locally
+const subtitleCacheDir = path.join(app.getPath('userData'), 'subtitles')
+
+ipcMain.handle('subtitle-cache-read', async (_, videoId: string) => {
+  try {
+    const filePath = path.join(subtitleCacheDir, `${videoId}.srt`)
+    if (fs.existsSync(filePath)) {
+      return { found: true, content: fs.readFileSync(filePath, 'utf-8') }
+    }
+    return { found: false }
+  } catch {
+    return { found: false }
+  }
+})
+
+ipcMain.handle('subtitle-cache-write', async (_, videoId: string, content: string) => {
+  try {
+    fs.mkdirSync(subtitleCacheDir, { recursive: true })
+    fs.writeFileSync(path.join(subtitleCacheDir, `${videoId}.srt`), content, 'utf-8')
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: String(err) }
   }
 })
 

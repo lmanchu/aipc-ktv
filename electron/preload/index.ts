@@ -28,6 +28,11 @@ contextBridge.exposeInMainWorld('electron', {
     openDisplayWindow: () => ipcRenderer.invoke('open-display-window'),
     closeDisplayWindow: () => ipcRenderer.invoke('close-display-window'),
     control: (command: string, ...args: any[]) => ipcRenderer.invoke('youtube-player-control', command, ...args),
+  },
+
+  subtitleCache: {
+    read: (videoId: string) => ipcRenderer.invoke('subtitle-cache-read', videoId),
+    write: (videoId: string, content: string) => ipcRenderer.invoke('subtitle-cache-write', videoId, content),
   }
 })
 
