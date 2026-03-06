@@ -81,7 +81,7 @@ function App() {
     const { ipcRenderer } = window.electron
     const { addSong, clearQueue } = useQueueStore.getState()
 
-    const handleApiAdd = (_: any, song: any) => {
+    const handleApiAdd = (song: any) => {
       console.log('[API] Adding song:', song.title)
       addSong(song)
     }

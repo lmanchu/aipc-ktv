@@ -408,7 +408,7 @@ const INVIDIOUS_INSTANCES = [
   'https://invidious.privacyredirect.com',
 ]
 
-async function searchYouTube(query: string, maxResults = 5): Promise<SongData[]> {
+async function searchInvidious(query: string, maxResults: number): Promise<SongData[]> {
   for (const instance of INVIDIOUS_INSTANCES) {
     try {
       const url = `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video&fields=videoId,title,author,lengthSeconds,videoThumbnails&sort_by=relevance`
@@ -425,6 +425,66 @@ async function searchYouTube(query: string, maxResults = 5): Promise<SongData[]>
     } catch { continue }
   }
   return []
+}
+
+// Fallback: scrape YouTube search results page
+async function searchYouTubeScrape(query: string, maxResults: number): Promise<SongData[]> {
+  try {
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    })
+    if (!res.ok) return []
+    const html = await res.text()
+
+    // Extract ytInitialData JSON from the page
+    const match = html.match(/var ytInitialData\s*=\s*(\{.+?\});\s*<\/script>/s)
+    if (!match) return []
+
+    const data = JSON.parse(match[1])
+    const contents = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents
+      ?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents
+
+    if (!Array.isArray(contents)) return []
+
+    const results: SongData[] = []
+    for (const item of contents) {
+      const v = item?.videoRenderer
+      if (!v?.videoId) continue
+      const durationText = v?.lengthText?.simpleText || '0:00'
+      const parts = durationText.split(':').map(Number)
+      const duration = parts.length === 3
+        ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+        : parts.length === 2
+        ? parts[0] * 60 + parts[1]
+        : 0
+
+      results.push({
+        videoId: v.videoId,
+        title: v.title?.runs?.[0]?.text || 'YouTube Video',
+        channel: v.ownerText?.runs?.[0]?.text || '',
+        thumbnail: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
+        duration,
+      })
+      if (results.length >= maxResults) break
+    }
+    return results
+  } catch {
+    return []
+  }
+}
+
+async function searchYouTube(query: string, maxResults = 5): Promise<SongData[]> {
+  // Try Invidious first (faster, structured API)
+  const invResults = await searchInvidious(query, maxResults)
+  if (invResults.length > 0) return invResults
+
+  // Fallback: scrape YouTube directly
+  return searchYouTubeScrape(query, maxResults)
 }
 
 // Parse JSON body from request
