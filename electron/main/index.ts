@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs'
+import http from 'node:http'
 import { update } from './update'
 
 const require = createRequire(import.meta.url)
@@ -361,4 +362,210 @@ ipcMain.handle('get-display-info', () => {
     })),
     displayWindowOpen: !!displayWin
   }
+})
+
+// ─── Skill API: HTTP server for OpenClaw / external agent control ───
+
+interface SongData {
+  videoId: string
+  title: string
+  channel: string
+  thumbnail: string
+  duration: number
+}
+
+// Main-process queue state (SSoT for both renderer and API)
+let queueState = {
+  currentSong: null as SongData | null,
+  upcomingSongs: [] as SongData[],
+  playbackState: 'idle' as string,
+}
+
+// Sync queue state from renderer
+ipcMain.on('queue-state-sync', (_, state) => {
+  queueState = state
+})
+
+// Add song from API → notify renderer
+function apiAddSong(song: SongData) {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('api-add-song', song)
+  }
+}
+
+// Skip song from API → notify renderer
+function apiSkipSong() {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('api-skip-song')
+  }
+}
+
+// YouTube search via Invidious (no API key)
+const INVIDIOUS_INSTANCES = [
+  'https://vid.puffyan.us',
+  'https://inv.nadeko.net',
+  'https://invidious.fdn.fr',
+  'https://invidious.privacyredirect.com',
+]
+
+async function searchYouTube(query: string, maxResults = 5): Promise<SongData[]> {
+  for (const instance of INVIDIOUS_INSTANCES) {
+    try {
+      const url = `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video&fields=videoId,title,author,lengthSeconds,videoThumbnails&sort_by=relevance`
+      const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
+      if (!res.ok) continue
+      const data = await res.json() as any[]
+      return data.slice(0, maxResults).map(v => ({
+        videoId: v.videoId,
+        title: v.title || 'YouTube Video',
+        channel: v.author || '',
+        thumbnail: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
+        duration: v.lengthSeconds || 0,
+      }))
+    } catch { continue }
+  }
+  return []
+}
+
+// Parse JSON body from request
+function parseBody(req: http.IncomingMessage): Promise<any> {
+  return new Promise((resolve, reject) => {
+    let body = ''
+    req.on('data', (chunk: string) => { body += chunk })
+    req.on('end', () => {
+      try { resolve(body ? JSON.parse(body) : {}) }
+      catch { reject(new Error('Invalid JSON')) }
+    })
+    req.on('error', reject)
+  })
+}
+
+function jsonResponse(res: http.ServerResponse, status: number, data: any) {
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+  res.end(JSON.stringify(data))
+}
+
+const API_PORT = parseInt(process.env.KTV_API_PORT || '18800', 10)
+
+const apiServer = http.createServer(async (req, res) => {
+  // CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    })
+    return res.end()
+  }
+
+  const url = new URL(req.url || '/', `http://localhost:${API_PORT}`)
+  const pathname = url.pathname
+
+  try {
+    // GET /api/status — current state
+    if (req.method === 'GET' && pathname === '/api/status') {
+      return jsonResponse(res, 200, {
+        currentSong: queueState.currentSong,
+        upcomingSongs: queueState.upcomingSongs,
+        playbackState: queueState.playbackState,
+        queueLength: queueState.upcomingSongs.length,
+        displayWindowOpen: !!displayWin,
+      })
+    }
+
+    // GET /api/queue — list queue
+    if (req.method === 'GET' && pathname === '/api/queue') {
+      return jsonResponse(res, 200, {
+        currentSong: queueState.currentSong,
+        upcomingSongs: queueState.upcomingSongs,
+      })
+    }
+
+    // POST /api/queue/add — add song by videoId or search query
+    if (req.method === 'POST' && pathname === '/api/queue/add') {
+      const body = await parseBody(req)
+
+      let song: SongData | null = null
+
+      if (body.videoId) {
+        song = {
+          videoId: body.videoId,
+          title: body.title || 'YouTube Video',
+          channel: body.channel || '',
+          thumbnail: `https://i.ytimg.com/vi/${body.videoId}/hqdefault.jpg`,
+          duration: body.duration || 0,
+        }
+      } else if (body.query) {
+        const results = await searchYouTube(body.query, 1)
+        if (results.length > 0) {
+          song = results[0]
+        } else {
+          return jsonResponse(res, 404, { error: 'No results found', query: body.query })
+        }
+      } else {
+        return jsonResponse(res, 400, { error: 'Provide videoId or query' })
+      }
+
+      apiAddSong(song)
+
+      // Also open display window if not open
+      if (!displayWin) {
+        await createDisplayWindow()
+      }
+
+      return jsonResponse(res, 200, { success: true, song })
+    }
+
+    // POST /api/search — search YouTube, return results without adding
+    if (req.method === 'POST' && pathname === '/api/search') {
+      const body = await parseBody(req)
+      if (!body.query) {
+        return jsonResponse(res, 400, { error: 'Provide query' })
+      }
+      const results = await searchYouTube(body.query, body.maxResults || 5)
+      return jsonResponse(res, 200, { results })
+    }
+
+    // POST /api/player/skip — skip current song
+    if (req.method === 'POST' && pathname === '/api/player/skip') {
+      apiSkipSong()
+      return jsonResponse(res, 200, { success: true })
+    }
+
+    // POST /api/player/volume — set volume
+    if (req.method === 'POST' && pathname === '/api/player/volume') {
+      const body = await parseBody(req)
+      if (displayWin) {
+        displayWin.webContents.send('youtube-player-control', 'set-volume', body.volume ?? 100)
+      }
+      return jsonResponse(res, 200, { success: true, volume: body.volume })
+    }
+
+    // POST /api/queue/clear — clear queue
+    if (req.method === 'POST' && pathname === '/api/queue/clear') {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('api-clear-queue')
+      }
+      return jsonResponse(res, 200, { success: true })
+    }
+
+    jsonResponse(res, 404, { error: 'Not found', endpoints: [
+      'GET  /api/status',
+      'GET  /api/queue',
+      'POST /api/queue/add    {videoId,title} or {query}',
+      'POST /api/queue/clear',
+      'POST /api/search       {query, maxResults?}',
+      'POST /api/player/skip',
+      'POST /api/player/volume {volume: 0-100}',
+    ]})
+  } catch (err) {
+    jsonResponse(res, 500, { error: String(err) })
+  }
+})
+
+// Start Skill API server
+app.whenReady().then(() => {
+  apiServer.listen(API_PORT, '127.0.0.1', () => {
+    console.log(`[KTV API] listening on http://127.0.0.1:${API_PORT}`)
+  })
 })

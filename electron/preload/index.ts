@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld('electron', {
     removeAllListeners(channel: string) {
       return ipcRenderer.removeAllListeners(channel)
     },
+    send(channel: string, ...args: any[]) {
+      return ipcRenderer.send(channel, ...args)
+    },
     sendMessage(channel: string, ...args: any[]) {
       return ipcRenderer.send(channel, ...args)
     },

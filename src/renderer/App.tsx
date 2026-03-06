@@ -65,6 +65,47 @@ function App() {
     }
   }, [nextSong])
 
+  // Sync queue state to main process for Skill API
+  useEffect(() => {
+    if (!window.electron?.ipcRenderer) return
+    window.electron.ipcRenderer.send('queue-state-sync', {
+      currentSong,
+      upcomingSongs,
+      playbackState,
+    })
+  }, [currentSong, upcomingSongs, playbackState])
+
+  // Listen for API commands (add song, skip, clear)
+  useEffect(() => {
+    if (!window.electron?.ipcRenderer) return
+    const { ipcRenderer } = window.electron
+    const { addSong, clearQueue } = useQueueStore.getState()
+
+    const handleApiAdd = (_: any, song: any) => {
+      console.log('[API] Adding song:', song.title)
+      addSong(song)
+    }
+    const handleApiSkip = () => {
+      console.log('[API] Skip requested')
+      stopVideo()
+      nextSong()
+    }
+    const handleApiClear = () => {
+      console.log('[API] Clear queue')
+      stopVideo()
+      clearQueue()
+    }
+
+    ipcRenderer.on('api-add-song', handleApiAdd)
+    ipcRenderer.on('api-skip-song', handleApiSkip)
+    ipcRenderer.on('api-clear-queue', handleApiClear)
+    return () => {
+      ipcRenderer.removeAllListeners('api-add-song')
+      ipcRenderer.removeAllListeners('api-skip-song')
+      ipcRenderer.removeAllListeners('api-clear-queue')
+    }
+  }, [nextSong, stopVideo])
+
   const handleVolumeChange = (newVolume: number) => {
     setVolume(newVolume)
     setPlayerVolume(newVolume)
