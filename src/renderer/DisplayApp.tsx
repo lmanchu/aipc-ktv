@@ -1,10 +1,92 @@
 import React, { useEffect, useRef, useState } from 'react'
 
+// --- SRT parser ---
+interface SubtitleCue {
+  start: number // seconds
+  end: number
+  text: string
+}
+
+function parseSRT(srt: string): SubtitleCue[] {
+  const cues: SubtitleCue[] = []
+  const blocks = srt.trim().split(/\n\s*\n/)
+  for (const block of blocks) {
+    const lines = block.trim().split('\n')
+    // Find the timestamp line (contains -->)
+    const tsIdx = lines.findIndex(l => l.includes('-->'))
+    if (tsIdx < 0) continue
+    const [startStr, endStr] = lines[tsIdx].split('-->')
+    const start = parseTimestamp(startStr.trim())
+    const end = parseTimestamp(endStr.trim())
+    const text = lines.slice(tsIdx + 1).join(' ').replace(/<[^>]+>/g, '').trim()
+    if (!isNaN(start) && !isNaN(end) && text) {
+      cues.push({ start, end, text })
+    }
+  }
+  return cues
+}
+
+function parseTimestamp(ts: string): number {
+  // 00:01:23,456 or 00:01:23.456
+  const m = ts.match(/(\d+):(\d+):(\d+)[,.](\d+)/)
+  if (!m) return NaN
+  return parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]) + parseInt(m[4]) / 1000
+}
+
+function findCue(cues: SubtitleCue[], time: number): string {
+  for (const c of cues) {
+    if (time >= c.start && time <= c.end) return c.text
+  }
+  return ''
+}
+
+// Invidious instances to try for captions
+const INVIDIOUS_INSTANCES = [
+  'https://inv.nadeko.net',
+  'https://invidious.nerdvpn.de',
+  'https://invidious.jing.rocks',
+]
+
+async function fetchCaptions(videoId: string): Promise<string | null> {
+  for (const instance of INVIDIOUS_INSTANCES) {
+    try {
+      // Get available caption tracks
+      const listRes = await fetch(`${instance}/api/v1/captions/${videoId}`, {
+        signal: AbortSignal.timeout(5000),
+      })
+      if (!listRes.ok) continue
+      const data = await listRes.json()
+      const captions = data.captions || []
+      if (captions.length === 0) continue
+
+      // Prefer: zh-TW > zh > zh-Hant > en > first available
+      const pref = ['zh-TW', 'zh', 'zh-Hant', 'en']
+      let track = null
+      for (const lang of pref) {
+        track = captions.find((c: any) => c.language_code === lang || c.label?.includes(lang))
+        if (track) break
+      }
+      if (!track) track = captions[0]
+
+      // Fetch SRT
+      const srtUrl = track.url.startsWith('http') ? track.url : `${instance}${track.url}`
+      const srtRes = await fetch(`${srtUrl}&fmt=srt`, { signal: AbortSignal.timeout(5000) })
+      if (!srtRes.ok) continue
+      return await srtRes.text()
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
 const DisplayApp: React.FC = () => {
   const [videoId, setVideoId] = useState<string | null>(null)
   const [subtitleText, setSubtitleText] = useState<string>('')
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const listeningRef = useRef(false)
+  const cuesRef = useRef<SubtitleCue[]>([])
+  const currentTimeRef = useRef(0)
 
   // Read videoId from URL query param (set by main process)
   useEffect(() => {
@@ -77,6 +159,76 @@ const DisplayApp: React.FC = () => {
       window.removeEventListener('message', handleMessage)
       clearTimeout(timer)
       listeningRef.current = false
+    }
+  }, [videoId])
+
+  // Load subtitles when videoId changes
+  useEffect(() => {
+    if (!videoId) return
+    let cancelled = false
+    cuesRef.current = []
+    setSubtitleText('')
+
+    async function loadSubtitles() {
+      // Try cache first
+      let srt: string | null = null
+      try {
+        srt = await window.electron?.subtitleCache?.read(videoId)
+      } catch { /* no cache */ }
+
+      if (!srt) {
+        // Fetch from Invidious
+        srt = await fetchCaptions(videoId)
+        if (srt && !cancelled) {
+          // Cache for next time
+          try { await window.electron?.subtitleCache?.write(videoId, srt) } catch {}
+        }
+      }
+
+      if (srt && !cancelled) {
+        const parsed = parseSRT(srt)
+        console.log(`[Display] Loaded ${parsed.length} subtitle cues for ${videoId}`)
+        cuesRef.current = parsed
+      }
+    }
+
+    loadSubtitles()
+    return () => { cancelled = true }
+  }, [videoId])
+
+  // Poll YouTube current time and sync subtitles
+  useEffect(() => {
+    if (!videoId) return
+
+    const handleTimeMessage = (event: MessageEvent) => {
+      if (typeof event.data !== 'string') return
+      try {
+        const data = JSON.parse(event.data)
+        if (data.event === 'infoDelivery' && typeof data.info?.currentTime === 'number') {
+          currentTimeRef.current = data.info.currentTime
+          if (cuesRef.current.length > 0) {
+            const text = findCue(cuesRef.current, data.info.currentTime)
+            setSubtitleText(text)
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    window.addEventListener('message', handleTimeMessage)
+
+    // Poll getCurrentTime from YouTube iframe every 300ms
+    const pollTimer = setInterval(() => {
+      if (iframeRef.current?.contentWindow && listeningRef.current) {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'getCurrentTime', args: [] }),
+          'https://www.youtube.com'
+        )
+      }
+    }, 300)
+
+    return () => {
+      window.removeEventListener('message', handleTimeMessage)
+      clearInterval(pollTimer)
     }
   }, [videoId])
 
