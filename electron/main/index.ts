@@ -400,91 +400,59 @@ function apiSkipSong() {
   }
 }
 
-// YouTube search via Invidious (no API key)
-const INVIDIOUS_INSTANCES = [
-  'https://vid.puffyan.us',
-  'https://inv.nadeko.net',
-  'https://invidious.fdn.fr',
-  'https://invidious.privacyredirect.com',
-]
-
-async function searchInvidious(query: string, maxResults: number): Promise<SongData[]> {
-  for (const instance of INVIDIOUS_INSTANCES) {
-    try {
-      const url = `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video&fields=videoId,title,author,lengthSeconds,videoThumbnails&sort_by=relevance`
-      const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
-      if (!res.ok) continue
-      const data = await res.json() as any[]
-      return data.slice(0, maxResults).map(v => ({
-        videoId: v.videoId,
-        title: v.title || 'YouTube Video',
-        channel: v.author || '',
-        thumbnail: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
-        duration: v.lengthSeconds || 0,
-      }))
-    } catch { continue }
-  }
-  return []
-}
-
-// Fallback: scrape YouTube search results page
-async function searchYouTubeScrape(query: string, maxResults: number): Promise<SongData[]> {
+// YouTube search via InnerTube API (no API key needed, handles CJK properly)
+async function searchYouTube(query: string, maxResults = 5): Promise<SongData[]> {
   try {
-    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(8000),
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
+    const res = await fetch('https://www.youtube.com/youtubei/v1/search', {
+      method: 'POST',
+      signal: AbortSignal.timeout(10000),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: '2.20240101.00.00',
+            hl: 'zh-TW',
+          },
+        },
+        query,
+      }),
     })
     if (!res.ok) return []
-    const html = await res.text()
 
-    // Extract ytInitialData JSON from the page
-    const match = html.match(/var ytInitialData\s*=\s*(\{.+?\});\s*<\/script>/s)
-    if (!match) return []
-
-    const data = JSON.parse(match[1])
-    const contents = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents
-      ?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents
-
-    if (!Array.isArray(contents)) return []
+    const data = await res.json() as any
+    const sections = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents
+      ?.sectionListRenderer?.contents || []
 
     const results: SongData[] = []
-    for (const item of contents) {
-      const v = item?.videoRenderer
-      if (!v?.videoId) continue
-      const durationText = v?.lengthText?.simpleText || '0:00'
-      const parts = durationText.split(':').map(Number)
-      const duration = parts.length === 3
-        ? parts[0] * 3600 + parts[1] * 60 + parts[2]
-        : parts.length === 2
-        ? parts[0] * 60 + parts[1]
-        : 0
+    for (const section of sections) {
+      const items = section?.itemSectionRenderer?.contents
+      if (!Array.isArray(items)) continue
+      for (const item of items) {
+        const v = item?.videoRenderer
+        if (!v?.videoId) continue
+        const durationText = v?.lengthText?.simpleText || '0:00'
+        const parts = durationText.split(':').map(Number)
+        const duration = parts.length === 3
+          ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+          : parts.length === 2
+          ? parts[0] * 60 + parts[1]
+          : 0
 
-      results.push({
-        videoId: v.videoId,
-        title: v.title?.runs?.[0]?.text || 'YouTube Video',
-        channel: v.ownerText?.runs?.[0]?.text || '',
-        thumbnail: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
-        duration,
-      })
-      if (results.length >= maxResults) break
+        results.push({
+          videoId: v.videoId,
+          title: v.title?.runs?.map((r: any) => r.text).join('') || 'YouTube Video',
+          channel: v.ownerText?.runs?.[0]?.text || '',
+          thumbnail: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
+          duration,
+        })
+        if (results.length >= maxResults) return results
+      }
     }
     return results
   } catch {
     return []
   }
-}
-
-async function searchYouTube(query: string, maxResults = 5): Promise<SongData[]> {
-  // Try Invidious first (faster, structured API)
-  const invResults = await searchInvidious(query, maxResults)
-  if (invResults.length > 0) return invResults
-
-  // Fallback: scrape YouTube directly
-  return searchYouTubeScrape(query, maxResults)
 }
 
 // Parse JSON body from request
