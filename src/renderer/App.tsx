@@ -5,6 +5,7 @@ import { PlaybackState } from '../shared/types'
 import YouTubeBrowser from './components/browser/YouTubeBrowser'
 import QueuePanel from './components/queue/QueuePanel'
 import PlaylistPanel from './components/playlist/PlaylistPanel'
+import KonamiGate from './components/konami/KonamiGate'
 import './App.css'
 
 function App() {
@@ -117,6 +118,7 @@ function App() {
   }
 
   return (
+    <KonamiGate>
     <div className="App flex flex-col h-screen">
       {/* Header with player controls */}
       <header className="shrink-0 px-4 py-2 border-b bg-white">
@@ -198,6 +200,7 @@ function App() {
         </div>
       </main>
     </div>
+    </KonamiGate>
   )
 }
 

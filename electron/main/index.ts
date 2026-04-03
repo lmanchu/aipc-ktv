@@ -73,8 +73,6 @@ async function createWindow() {
 
   if (VITE_DEV_SERVER_URL) { // #298
     win.loadURL(VITE_DEV_SERVER_URL)
-    // Open devTool if the app is not packaged
-    win.webContents.openDevTools()
   } else {
     win.loadFile(indexHtml)
   }
@@ -155,7 +153,6 @@ async function createDisplayWindow() {
 
   if (VITE_DEV_SERVER_URL) {
     displayWin.loadURL(`${VITE_DEV_SERVER_URL}display.html`)
-    displayWin.webContents.openDevTools()
   } else {
     displayWin.loadFile(displayHtml)
   }
